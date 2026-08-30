@@ -1,0 +1,57 @@
+# 知识卡导出索引文件
+schema_version: 1
+locale: en-US
+branch: main
+nodes_managed: true
+exported_at: "2026-08-30T09:24:27Z"
+modules:
+    "":
+        dir_name: LifeLine Ride — Village Emergency Response System
+        title: LifeLine Ride — Village Emergency Response System
+        scope:
+            - PROJECT.md
+            - DEMO_SCRIPT.md
+            - step2 Spec Qoder-AI-Coding-Hands-on-Lab-Guide.md
+            - village-emergency-response-system-spec.md
+            - .gitignore
+            - README.md
+        source_files: []
+        children:
+            - backend
+            - mockdata
+        depends_on: []
+        related_to: []
+    backend:
+        dir_name: LifeLine Ride Backend (Triage + Help Bot Orchestration)
+        title: LifeLine Ride Backend (Triage + Help Bot Orchestration)
+        scope:
+            - backend/
+        source_files: []
+        children:
+            - backend/help_bot
+        depends_on: []
+        related_to:
+            - path: mockdata
+    backend/help_bot:
+        dir_name: Responder AI Help Bot (Module 2) — Urdu Voice Guidance Engine
+        title: Responder AI Help Bot (Module 2) — Urdu Voice Guidance Engine
+        scope:
+            - backend/help_bot_runner.py
+            - backend/services/help_bot_service.py
+            - backend/services/help_bot_content.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: mockdata
+    mockdata:
+        dir_name: HelpBot Simulation Scripts & Media Assets
+        title: HelpBot Simulation Scripts & Media Assets
+        scope:
+            - mockdata/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: backend
+            - path: backend/help_bot

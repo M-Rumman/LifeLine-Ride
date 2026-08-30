@@ -1,0 +1,1 @@
+Replay runs are identified by `INC-SIM-*` incident IDs and include a `run_kind=replay` flag; each replay file embeds an `expectations` array whose `match` field indicates whether the help-bot's actual intent matched the scripted expectation, enabling automated pass/fail checks against these fixtures.

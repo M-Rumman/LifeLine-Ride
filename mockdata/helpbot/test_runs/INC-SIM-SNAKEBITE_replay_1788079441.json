@@ -1,0 +1,315 @@
+{
+  "run_kind": "replay",
+  "script_title": "Branch snakebite: initial guidance -> 2 step advances -> in-scope Q (tie cloth above bite - must say NO) -> out-of-scope Q (fever medicine) -> escalation (breathing difficulty)",
+  "incident_id": "INC-SIM-SNAKEBITE",
+  "branch_id": "snakebite",
+  "branch_matched": true,
+  "provider": "gemini",
+  "started_at": "2026-08-30T08:42:14.022164+00:00",
+  "finalized_at": "2026-08-30T08:44:01.739106+00:00",
+  "turns": [
+    {
+      "timestamp": "2026-08-30T08:42:14.022164+00:00",
+      "speaker": "bot",
+      "text": "معذرت، میں ٹھیک سے سن نہیں پایا۔ پریشان نہ ہوں۔ جو ہدایت دی گئی ہے اسی پر عمل جاری رکھیں، مدد راستے میں ہے۔ میں دوبارہ سننے کی کوشش کر رہا ہوں۔",
+      "tts_error": "429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and ",
+      "intended_line": "میں لائف لائن ہیلپ بوٹ ہوں۔ یہ سانپ کے کاٹنے کا کیس ہے۔ مریض کو پرسکون رکھیں اور بالکل ہلنے نہ دیں، حرکت سے زہر تیزی سے پھیلتا ہے۔"
+    },
+    {
+      "timestamp": "2026-08-30T08:42:27.454322+00:00",
+      "speaker": "bot",
+      "text": "معذرت، میں ٹھیک سے سن نہیں پایا۔ پریشان نہ ہوں۔ جو ہدایت دی گئی ہے اسی پر عمل جاری رکھیں، مدد راستے میں ہے۔ میں دوبارہ سننے کی کوشش کر رہا ہوں۔",
+      "tts_error": "429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and ",
+      "intended_line": "کٹے ہوئے حصے کو جسم کے ساتھ ساکت اور دل کی سطح سے نیچے رکھیں۔"
+    },
+    {
+      "timestamp": "2026-08-30T08:42:40.494761+00:00",
+      "speaker": "bot",
+      "text": "معذرت، میں ٹھیک سے سن نہیں پایا۔ پریشان نہ ہوں۔ جو ہدایت دی گئی ہے اسی پر عمل جاری رکھیں، مدد راستے میں ہے۔ میں دوبارہ سننے کی کوشش کر رہا ہوں۔",
+      "tts_error": "429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and ",
+      "intended_line": "پہلا قدم: مریض کو لیٹائیں اور کٹے ہوئے ہاتھ یا پاؤں کو بالکل حرکت نہ دیں۔ جب مکمل ہو جائے تو کہیں، ہو گیا۔"
+    },
+    {
+      "timestamp": "2026-08-30T08:42:52.037417+00:00",
+      "speaker": "responder",
+      "text": "مریض کو لٹا دیا ہے، کٹا ہوا ہاتھ بالکل حرکت نہیں دے رہا"
+    },
+    {
+      "timestamp": "2026-08-30T08:42:57.810573+00:00",
+      "speaker": "bot",
+      "text": "معذرت، میں ٹھیک سے سن نہیں پایا۔ پریشان نہ ہوں۔ جو ہدایت دی گئی ہے اسی پر عمل جاری رکھیں، مدد راستے میں ہے۔ میں دوبارہ سننے کی کوشش کر رہا ہوں۔",
+      "tts_error": "429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and ",
+      "intended_line": "دوسرا قدم: کٹنے کی جگہ کے قریب انگوٹھی، کڑا، گھڑی یا تنگ کپڑا فوراً اتار دیں، کیونکہ سوجن آئے گی۔ جب مکمل ہو جائے تو کہیں، ہو گیا۔"
+    },
+    {
+      "timestamp": "2026-08-30T08:43:09.346875+00:00",
+      "speaker": "responder",
+      "text": "کڑا اور گھڑی اتار دی ہے"
+    },
+    {
+      "timestamp": "2026-08-30T08:43:11.118413+00:00",
+      "speaker": "bot",
+      "text": "معذرت، میں ٹھیک سے سن نہیں پایا۔ پریشان نہ ہوں۔ جو ہدایت دی گئی ہے اسی پر عمل جاری رکھیں، مدد راستے میں ہے۔ میں دوبارہ سننے کی کوشش کر رہا ہوں۔"
+    },
+    {
+      "timestamp": "2026-08-30T08:43:22.644320+00:00",
+      "speaker": "responder",
+      "text": "کیا میں کٹنے کے اوپر کپڑا یا پٹی کس کر باندھ دوں؟"
+    },
+    {
+      "timestamp": "2026-08-30T08:43:24.152708+00:00",
+      "speaker": "bot",
+      "text": "معذرت، میں ٹھیک سے سن نہیں پایا۔ پریشان نہ ہوں۔ جو ہدایت دی گئی ہے اسی پر عمل جاری رکھیں، مدد راستے میں ہے۔ میں دوبارہ سننے کی کوشش کر رہا ہوں۔"
+    },
+    {
+      "timestamp": "2026-08-30T08:43:35.690092+00:00",
+      "speaker": "responder",
+      "text": "کیا مریض کو بخار کی گولی دے دوں؟"
+    },
+    {
+      "timestamp": "2026-08-30T08:43:37.151296+00:00",
+      "speaker": "bot",
+      "text": "معذرت، میں ٹھیک سے سن نہیں پایا۔ پریشان نہ ہوں۔ جو ہدایت دی گئی ہے اسی پر عمل جاری رکھیں، مدد راستے میں ہے۔ میں دوبارہ سننے کی کوشش کر رہا ہوں۔"
+    },
+    {
+      "timestamp": "2026-08-30T08:43:48.679098+00:00",
+      "speaker": "responder",
+      "text": "مریض کو سانس لینے میں بہت تکلیف ہو رہی ہے"
+    },
+    {
+      "timestamp": "2026-08-30T08:43:50.198885+00:00",
+      "speaker": "bot",
+      "text": "معذرت، میں ٹھیک سے سن نہیں پایا۔ پریشان نہ ہوں۔ جو ہدایت دی گئی ہے اسی پر عمل جاری رکھیں، مدد راستے میں ہے۔ میں دوبارہ سننے کی کوشش کر رہا ہوں۔"
+    }
+  ],
+  "expectations": [
+    {
+      "transcript": "مریض کو لٹا دیا ہے، کٹا ہوا ہاتھ بالکل حرکت نہیں دے رہا",
+      "expected": "step_done",
+      "actual": "step_done",
+      "match": true
+    },
+    {
+      "transcript": "کڑا اور گھڑی اتار دی ہے",
+      "expected": "step_done",
+      "actual": "unclear",
+      "match": false
+    },
+    {
+      "transcript": "کیا میں کٹنے کے اوپر کپڑا یا پٹی کس کر باندھ دوں؟",
+      "expected": "in_scope_question",
+      "actual": "unclear",
+      "match": false
+    },
+    {
+      "transcript": "کیا مریض کو بخار کی گولی دے دوں؟",
+      "expected": "out_of_scope",
+      "actual": "unclear",
+      "match": false
+    },
+    {
+      "transcript": "مریض کو سانس لینے میں بہت تکلیف ہو رہی ہے",
+      "expected": "escalation",
+      "actual": "unclear",
+      "match": false
+    }
+  ],
+  "expectation_summary": "1/5 matched",
+  "latencies": [
+    {
+      "transcript": "مریض کو لٹا دیا ہے، کٹا ہوا ہاتھ بالکل حرکت نہیں دے رہا",
+      "intent": "step_done",
+      "detect_ms": 4220,
+      "respond_ms": 17309,
+      "turn_wall_ms": 17309
+    },
+    {
+      "transcript": "کڑا اور گھڑی اتار دی ہے",
+      "intent": "unclear",
+      "detect_ms": 1771,
+      "respond_ms": 13297,
+      "turn_wall_ms": 13297
+    },
+    {
+      "transcript": "کیا میں کٹنے کے اوپر کپڑا یا پٹی کس کر باندھ دوں؟",
+      "intent": "unclear",
+      "detect_ms": 1507,
+      "respond_ms": 13045,
+      "turn_wall_ms": 13045
+    },
+    {
+      "transcript": "کیا مریض کو بخار کی گولی دے دوں؟",
+      "intent": "unclear",
+      "detect_ms": 1460,
+      "respond_ms": 12988,
+      "turn_wall_ms": 12988
+    },
+    {
+      "transcript": "مریض کو سانس لینے میں بہت تکلیف ہو رہی ہے",
+      "intent": "unclear",
+      "detect_ms": 1519,
+      "respond_ms": 13059,
+      "turn_wall_ms": 13059
+    }
+  ],
+  "latency_summary_ms": {
+    "min": 12988,
+    "max": 17309,
+    "avg": 13939
+  },
+  "help_bot_transitions": [
+    {
+      "timestamp": "2026-08-30T08:42:11.687898+00:00",
+      "branch": "snakebite",
+      "from_state": "created",
+      "to_state": "initial_guidance",
+      "trigger_type": "branch_entered",
+      "detail": "branch=snakebite; matched=True; flags=['venomous_snake_bite', 'puncture_wounds']"
+    },
+    {
+      "timestamp": "2026-08-30T08:42:38.997588+00:00",
+      "branch": "snakebite",
+      "from_state": "initial_guidance",
+      "to_state": "ongoing_monitor",
+      "trigger_type": "step_started",
+      "detail": "step 1/3: keep_still"
+    },
+    {
+      "timestamp": "2026-08-30T08:42:56.257850+00:00",
+      "branch": "snakebite",
+      "from_state": "ongoing_monitor",
+      "to_state": "ongoing_monitor",
+      "trigger_type": "step_started",
+      "detail": "step 2/3: remove_constriction"
+    },
+    {
+      "timestamp": "2026-08-30T08:43:11.118205+00:00",
+      "branch": "snakebite",
+      "from_state": "ongoing_monitor",
+      "to_state": "ongoing_monitor",
+      "trigger_type": "unintelligible_input",
+      "detail": "fail-safe line spoken; loop continues"
+    },
+    {
+      "timestamp": "2026-08-30T08:43:24.152150+00:00",
+      "branch": "snakebite",
+      "from_state": "ongoing_monitor",
+      "to_state": "ongoing_monitor",
+      "trigger_type": "unintelligible_input",
+      "detail": "fail-safe line spoken; loop continues"
+    },
+    {
+      "timestamp": "2026-08-30T08:43:37.151119+00:00",
+      "branch": "snakebite",
+      "from_state": "ongoing_monitor",
+      "to_state": "ongoing_monitor",
+      "trigger_type": "unintelligible_input",
+      "detail": "fail-safe line spoken; loop continues"
+    },
+    {
+      "timestamp": "2026-08-30T08:43:50.198683+00:00",
+      "branch": "snakebite",
+      "from_state": "ongoing_monitor",
+      "to_state": "ongoing_monitor",
+      "trigger_type": "unintelligible_input",
+      "detail": "fail-safe line spoken; loop continues"
+    },
+    {
+      "timestamp": "2026-08-30T08:44:01.738824+00:00",
+      "branch": "snakebite",
+      "from_state": "ongoing_monitor",
+      "to_state": "ongoing_monitor",
+      "trigger_type": "session_finalized",
+      "detail": "run_kind=replay"
+    }
+  ],
+  "final_incident": {
+    "incident_id": "INC-SIM-SNAKEBITE",
+    "timestamp_reported": "2026-08-30T08:42:11.686654+00:00",
+    "reporter_id": "REP-SIM",
+    "gps_location": {
+      "latitude": 31.5204,
+      "longitude": 74.3587,
+      "village_id": "VILLAGE-A"
+    },
+    "photo_ref": "simulated",
+    "voice_transcript": "(simulated incident for Module 2 help-bot run)",
+    "severity_tier": "critical",
+    "injury_type_flags": [
+      "venomous_snake_bite",
+      "puncture_wounds"
+    ],
+    "responder_assigned_id": "RESP-02",
+    "responder_dispatch_timestamp": "2026-08-30T08:42:11.686765+00:00",
+    "bhu_notified": true,
+    "bhu_notify_timestamp": "2026-08-30T08:42:11.686765+00:00",
+    "ambulance_requested": true,
+    "outcome": null,
+    "help_bot_transitions": [
+      {
+        "timestamp": "2026-08-30T08:42:11.687898+00:00",
+        "branch": "snakebite",
+        "from_state": "created",
+        "to_state": "initial_guidance",
+        "trigger_type": "branch_entered",
+        "detail": "branch=snakebite; matched=True; flags=['venomous_snake_bite', 'puncture_wounds']"
+      },
+      {
+        "timestamp": "2026-08-30T08:42:38.997588+00:00",
+        "branch": "snakebite",
+        "from_state": "initial_guidance",
+        "to_state": "ongoing_monitor",
+        "trigger_type": "step_started",
+        "detail": "step 1/3: keep_still"
+      },
+      {
+        "timestamp": "2026-08-30T08:42:56.257850+00:00",
+        "branch": "snakebite",
+        "from_state": "ongoing_monitor",
+        "to_state": "ongoing_monitor",
+        "trigger_type": "step_started",
+        "detail": "step 2/3: remove_constriction"
+      },
+      {
+        "timestamp": "2026-08-30T08:43:11.118205+00:00",
+        "branch": "snakebite",
+        "from_state": "ongoing_monitor",
+        "to_state": "ongoing_monitor",
+        "trigger_type": "unintelligible_input",
+        "detail": "fail-safe line spoken; loop continues"
+      },
+      {
+        "timestamp": "2026-08-30T08:43:24.152150+00:00",
+        "branch": "snakebite",
+        "from_state": "ongoing_monitor",
+        "to_state": "ongoing_monitor",
+        "trigger_type": "unintelligible_input",
+        "detail": "fail-safe line spoken; loop continues"
+      },
+      {
+        "timestamp": "2026-08-30T08:43:37.151119+00:00",
+        "branch": "snakebite",
+        "from_state": "ongoing_monitor",
+        "to_state": "ongoing_monitor",
+        "trigger_type": "unintelligible_input",
+        "detail": "fail-safe line spoken; loop continues"
+      },
+      {
+        "timestamp": "2026-08-30T08:43:50.198683+00:00",
+        "branch": "snakebite",
+        "from_state": "ongoing_monitor",
+        "to_state": "ongoing_monitor",
+        "trigger_type": "unintelligible_input",
+        "detail": "fail-safe line spoken; loop continues"
+      },
+      {
+        "timestamp": "2026-08-30T08:44:01.738824+00:00",
+        "branch": "snakebite",
+        "from_state": "ongoing_monitor",
+        "to_state": "ongoing_monitor",
+        "trigger_type": "session_finalized",
+        "detail": "run_kind=replay"
+      }
+    ]
+  }
+}

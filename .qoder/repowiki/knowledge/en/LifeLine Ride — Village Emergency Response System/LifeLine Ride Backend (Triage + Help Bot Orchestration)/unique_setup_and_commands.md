@@ -1,0 +1,1 @@
+Run Module 1 alone via `python backend/slice_runner.py`; run Module 2 via `python backend/help_bot_runner.py --simulate <branch> --mode replay|mic` or `--from-pipeline --photo ... --voice ... --village VILLAGE-A --mode replay <script>`; prewarm TTS cache with `--prewarm-tts` and verify spoken-Urdu round-trip with `--verify-tts`.

@@ -1,0 +1,356 @@
+{
+  "run_kind": "replay",
+  "script_title": "Branch heavy_bleeding: initial guidance -> 2 step advances -> in-scope Q (soaked cloth) -> out-of-scope Q (water) -> escalation (bleeding worse + losing consciousness)",
+  "incident_id": "INC-SIM-HEAVY-BLEEDING",
+  "branch_id": "heavy_bleeding",
+  "branch_matched": true,
+  "provider": "gemini",
+  "started_at": "2026-08-30T07:51:56.473658+00:00",
+  "finalized_at": "2026-08-30T07:55:50.097602+00:00",
+  "turns": [
+    {
+      "timestamp": "2026-08-30T07:51:56.473658+00:00",
+      "speaker": "bot",
+      "text": "میں لائف لائن ہیلپ بوٹ ہوں۔ میں قدم بہ قدم آپ کی مدد کروں گا۔ سب سے پہلے گہرا سانس لیں اور پرسکون رہیں۔",
+      "tts_cached": false
+    },
+    {
+      "timestamp": "2026-08-30T07:52:16.346380+00:00",
+      "speaker": "bot",
+      "text": "یہ شدید خون بہنے کا کیس ہے۔ فوراً زخم پر صاف کپڑا رکھیں اور اپنی ہتھیلی سے مضبوط دباؤ ڈالیں۔",
+      "tts_cached": false
+    },
+    {
+      "timestamp": "2026-08-30T07:52:32.617428+00:00",
+      "speaker": "bot",
+      "text": "پہلا قدم: زخم پر براہ راست مسلسل دباؤ رکھیں۔ دباؤ ہٹائیں نہیں۔ جب مکمل ہو جائے تو کہیں، ہو گیا۔",
+      "tts_cached": false
+    },
+    {
+      "timestamp": "2026-08-30T07:52:41.856323+00:00",
+      "speaker": "responder",
+      "text": "ٹھیک ہے، زخم پر کپڑا رکھ کر دباؤ ڈال دیا ہے"
+    },
+    {
+      "timestamp": "2026-08-30T07:52:56.707504+00:00",
+      "speaker": "bot",
+      "text": "دوسرا قدم: اگر ممکن ہو تو زخمی حصہ دل کی سطح سے اوپر اٹھا کر رکھیں، مگر دباؤ نہ چھوڑیں۔ جب مکمل ہو جائے تو کہیں، ہو گیا۔",
+      "tts_cached": false
+    },
+    {
+      "timestamp": "2026-08-30T07:53:07.527446+00:00",
+      "speaker": "responder",
+      "text": "ہاتھ اوپر اٹھا دیا ہے، اگلا قدم بتائیں"
+    },
+    {
+      "timestamp": "2026-08-30T07:53:24.284688+00:00",
+      "speaker": "bot",
+      "text": "تیسرا قدم: اگر کپڑا خون سے بھیگ جائے تو اسے نہ اتاریں، اسی کے اوپر دوسرا صاف کپڑا رکھ کر دباؤ جاری رکھیں۔ جب مکمل ہو جائے تو کہیں، ہو گیا۔",
+      "tts_cached": false
+    },
+    {
+      "timestamp": "2026-08-30T07:53:37.720007+00:00",
+      "speaker": "responder",
+      "text": "کپڑا خون سے بالکل بھیگ گیا ہے، کیا میں اسے اتار کر نیا کپڑا لگا دوں؟"
+    },
+    {
+      "timestamp": "2026-08-30T07:53:55.935980+00:00",
+      "speaker": "bot",
+      "text": "کپڑا ہرگز نہ اتاریں، اس سے خون کا بہنا دوبارہ تیز ہو سکتا ہے۔ بھیگے ہوئے کپڑے کے اوپر ایک اور صاف یا گاڑھا کپڑا رکھیں اور دباؤ مضبوطی سے جاری رکھیں۔",
+      "tts_cached": false
+    },
+    {
+      "timestamp": "2026-08-30T07:54:08.887737+00:00",
+      "speaker": "responder",
+      "text": "مریض کہہ رہا ہے اسے شدید پیاس لگی ہے، کیا میں اسے پانی پلا دوں؟"
+    },
+    {
+      "timestamp": "2026-08-30T07:54:26.556075+00:00",
+      "speaker": "bot",
+      "text": "میں اس سوال کے جواب کی تربیت یافتہ نہیں ہوں، اس لیے میں غلط مشورہ نہیں دوں گا۔ بنیادی ہدایت یہ ہے: مریض کو پرسکون رکھیں، جاری ابتدائی اقدامات پر عمل کریں، اور طبی مدد کے پہنچنے کا انتظار کریں۔",
+      "tts_cached": false
+    },
+    {
+      "timestamp": "2026-08-30T07:54:41.225116+00:00",
+      "speaker": "responder",
+      "text": "خون نہیں رک رہا اور مریض بے ہوش ہو رہا ہے"
+    },
+    {
+      "timestamp": "2026-08-30T07:54:55.964388+00:00",
+      "speaker": "bot",
+      "text": "الرٹ: صورتحال سنگین ہو رہی ہے۔ میں نے اسی وقت مزید طبی مدد اور ایمبولینس کی درخواست بھیج دی ہے۔",
+      "tts_cached": false
+    },
+    {
+      "timestamp": "2026-08-30T07:55:16.908187+00:00",
+      "speaker": "bot",
+      "text": "اگر خون مسلسل نہیں رک رہا تو زخم سے پانچ سے سات سینٹی میٹر اوپر، جوڑ کے اوپر نہیں، چوڑی پٹی یا کپڑا ٹورنیکیٹ کی طرح کس کر باندھیں اور باندھنے کا وقت یاد رکھیں۔",
+      "tts_cached": false
+    },
+    {
+      "timestamp": "2026-08-30T07:55:40.448789+00:00",
+      "speaker": "bot",
+      "text": "اگر مریض بے ہوش ہو رہا ہے تو اسے سیدھا لیٹائیں، ٹانگیں ہلکی اٹھائیں، سانس چیک کرتے رہیں، اور مجھے آگاہ رکھیں۔",
+      "tts_cached": false
+    }
+  ],
+  "expectations": [
+    {
+      "transcript": "ٹھیک ہے، زخم پر کپڑا رکھ کر دباؤ ڈال دیا ہے",
+      "expected": "step_done",
+      "actual": "step_done",
+      "match": true
+    },
+    {
+      "transcript": "ہاتھ اوپر اٹھا دیا ہے، اگلا قدم بتائیں",
+      "expected": "step_done",
+      "actual": "step_done",
+      "match": true
+    },
+    {
+      "transcript": "کپڑا خون سے بالکل بھیگ گیا ہے، کیا میں اسے اتار کر نیا کپڑا لگا دوں؟",
+      "expected": "in_scope_question",
+      "actual": "in_scope_question",
+      "match": true
+    },
+    {
+      "transcript": "مریض کہہ رہا ہے اسے شدید پیاس لگی ہے، کیا میں اسے پانی پلا دوں؟",
+      "expected": "out_of_scope",
+      "actual": "out_of_scope",
+      "match": true
+    },
+    {
+      "transcript": "خون نہیں رک رہا اور مریض بے ہوش ہو رہا ہے",
+      "expected": "escalation",
+      "actual": "escalation",
+      "match": true
+    }
+  ],
+  "expectation_summary": "5/5 matched",
+  "latencies": [
+    {
+      "transcript": "ٹھیک ہے، زخم پر کپڑا رکھ کر دباؤ ڈال دیا ہے",
+      "intent": "step_done",
+      "detect_ms": 5662,
+      "respond_ms": 25671
+    },
+    {
+      "transcript": "ہاتھ اوپر اٹھا دیا ہے، اگلا قدم بتائیں",
+      "intent": "step_done",
+      "detect_ms": 4081,
+      "respond_ms": 30192
+    },
+    {
+      "transcript": "کپڑا خون سے بالکل بھیگ گیا ہے، کیا میں اسے اتار کر نیا کپڑا لگا دوں؟",
+      "intent": "in_scope_question",
+      "detect_ms": 8469,
+      "respond_ms": 31167
+    },
+    {
+      "transcript": "مریض کہہ رہا ہے اسے شدید پیاس لگی ہے، کیا میں اسے پانی پلا دوں؟",
+      "intent": "out_of_scope",
+      "detect_ms": 7087,
+      "respond_ms": 32337
+    },
+    {
+      "transcript": "خون نہیں رک رہا اور مریض بے ہوش ہو رہا ہے",
+      "intent": "escalation",
+      "detect_ms": 6858,
+      "respond_ms": 68872
+    }
+  ],
+  "latency_summary_ms": {
+    "min": 25671,
+    "max": 68872,
+    "avg": 37647
+  },
+  "help_bot_transitions": [
+    {
+      "timestamp": "2026-08-30T07:51:45.528144+00:00",
+      "branch": "heavy_bleeding",
+      "from_state": "created",
+      "to_state": "initial_guidance",
+      "trigger_type": "branch_entered",
+      "detail": "branch=heavy_bleeding; matched=True; flags=['machine_entanglement', 'heavy_bleeding', 'traumatic_amputation']"
+    },
+    {
+      "timestamp": "2026-08-30T07:52:24.494917+00:00",
+      "branch": "heavy_bleeding",
+      "from_state": "initial_guidance",
+      "to_state": "ongoing_monitor",
+      "trigger_type": "step_started",
+      "detail": "step 1/3: direct_pressure"
+    },
+    {
+      "timestamp": "2026-08-30T07:52:47.518819+00:00",
+      "branch": "heavy_bleeding",
+      "from_state": "ongoing_monitor",
+      "to_state": "ongoing_monitor",
+      "trigger_type": "step_started",
+      "detail": "step 2/3: elevate"
+    },
+    {
+      "timestamp": "2026-08-30T07:53:11.609169+00:00",
+      "branch": "heavy_bleeding",
+      "from_state": "ongoing_monitor",
+      "to_state": "ongoing_monitor",
+      "trigger_type": "step_started",
+      "detail": "step 3/3: add_cloth"
+    },
+    {
+      "timestamp": "2026-08-30T07:53:46.189360+00:00",
+      "branch": "heavy_bleeding",
+      "from_state": "ongoing_monitor",
+      "to_state": "ongoing_monitor",
+      "trigger_type": "in_scope_question",
+      "detail": "qa_entry=cloth_soaked"
+    },
+    {
+      "timestamp": "2026-08-30T07:54:15.975564+00:00",
+      "branch": "heavy_bleeding",
+      "from_state": "ongoing_monitor",
+      "to_state": "ongoing_monitor",
+      "trigger_type": "out_of_scope_question",
+      "detail": "honest fallback; no improvisation"
+    },
+    {
+      "timestamp": "2026-08-30T07:54:48.083764+00:00",
+      "branch": "heavy_bleeding",
+      "from_state": "ongoing_monitor",
+      "to_state": "escalated_monitor",
+      "trigger_type": "escalation_triggered",
+      "detail": "signal=uncontrolled_bleeding_and_unconsciousness; suggested_tier=critical"
+    },
+    {
+      "timestamp": "2026-08-30T07:55:50.097429+00:00",
+      "branch": null,
+      "from_state": "escalation_hook",
+      "to_state": "escalated",
+      "trigger_type": "escalateIncident",
+      "detail": {
+        "trigger": "uncontrolled_bleeding_and_unconsciousness",
+        "old_tier": "critical",
+        "new_tier": "critical",
+        "transcript_excerpt": "خون نہیں رک رہا اور مریض بے ہوش ہو رہا ہے",
+        "new_flags": [
+          "uncontrolled_bleeding_and_unconsciousness"
+        ]
+      }
+    },
+    {
+      "timestamp": "2026-08-30T07:55:50.097554+00:00",
+      "branch": "heavy_bleeding",
+      "from_state": "escalated_monitor",
+      "to_state": "escalated_monitor",
+      "trigger_type": "session_finalized",
+      "detail": "run_kind=replay"
+    }
+  ],
+  "final_incident": {
+    "incident_id": "INC-SIM-HEAVY-BLEEDING",
+    "timestamp_reported": "2026-08-30T07:51:31.764661+00:00",
+    "reporter_id": "REP-SIM",
+    "gps_location": {
+      "latitude": 31.5204,
+      "longitude": 74.3587,
+      "village_id": "VILLAGE-A"
+    },
+    "photo_ref": "simulated",
+    "voice_transcript": "(simulated incident for Module 2 help-bot run)",
+    "severity_tier": "critical",
+    "injury_type_flags": [
+      "machine_entanglement",
+      "heavy_bleeding",
+      "traumatic_amputation",
+      "uncontrolled_bleeding_and_unconsciousness"
+    ],
+    "responder_assigned_id": "RESP-02",
+    "responder_dispatch_timestamp": "2026-08-30T07:51:31.764747+00:00",
+    "bhu_notified": true,
+    "bhu_notify_timestamp": "2026-08-30T07:51:31.764747+00:00",
+    "ambulance_requested": true,
+    "outcome": null,
+    "help_bot_transitions": [
+      {
+        "timestamp": "2026-08-30T07:51:45.528144+00:00",
+        "branch": "heavy_bleeding",
+        "from_state": "created",
+        "to_state": "initial_guidance",
+        "trigger_type": "branch_entered",
+        "detail": "branch=heavy_bleeding; matched=True; flags=['machine_entanglement', 'heavy_bleeding', 'traumatic_amputation']"
+      },
+      {
+        "timestamp": "2026-08-30T07:52:24.494917+00:00",
+        "branch": "heavy_bleeding",
+        "from_state": "initial_guidance",
+        "to_state": "ongoing_monitor",
+        "trigger_type": "step_started",
+        "detail": "step 1/3: direct_pressure"
+      },
+      {
+        "timestamp": "2026-08-30T07:52:47.518819+00:00",
+        "branch": "heavy_bleeding",
+        "from_state": "ongoing_monitor",
+        "to_state": "ongoing_monitor",
+        "trigger_type": "step_started",
+        "detail": "step 2/3: elevate"
+      },
+      {
+        "timestamp": "2026-08-30T07:53:11.609169+00:00",
+        "branch": "heavy_bleeding",
+        "from_state": "ongoing_monitor",
+        "to_state": "ongoing_monitor",
+        "trigger_type": "step_started",
+        "detail": "step 3/3: add_cloth"
+      },
+      {
+        "timestamp": "2026-08-30T07:53:46.189360+00:00",
+        "branch": "heavy_bleeding",
+        "from_state": "ongoing_monitor",
+        "to_state": "ongoing_monitor",
+        "trigger_type": "in_scope_question",
+        "detail": "qa_entry=cloth_soaked"
+      },
+      {
+        "timestamp": "2026-08-30T07:54:15.975564+00:00",
+        "branch": "heavy_bleeding",
+        "from_state": "ongoing_monitor",
+        "to_state": "ongoing_monitor",
+        "trigger_type": "out_of_scope_question",
+        "detail": "honest fallback; no improvisation"
+      },
+      {
+        "timestamp": "2026-08-30T07:54:48.083764+00:00",
+        "branch": "heavy_bleeding",
+        "from_state": "ongoing_monitor",
+        "to_state": "escalated_monitor",
+        "trigger_type": "escalation_triggered",
+        "detail": "signal=uncontrolled_bleeding_and_unconsciousness; suggested_tier=critical"
+      },
+      {
+        "timestamp": "2026-08-30T07:55:50.097429+00:00",
+        "branch": null,
+        "from_state": "escalation_hook",
+        "to_state": "escalated",
+        "trigger_type": "escalateIncident",
+        "detail": {
+          "trigger": "uncontrolled_bleeding_and_unconsciousness",
+          "old_tier": "critical",
+          "new_tier": "critical",
+          "transcript_excerpt": "خون نہیں رک رہا اور مریض بے ہوش ہو رہا ہے",
+          "new_flags": [
+            "uncontrolled_bleeding_and_unconsciousness"
+          ]
+        }
+      },
+      {
+        "timestamp": "2026-08-30T07:55:50.097554+00:00",
+        "branch": "heavy_bleeding",
+        "from_state": "escalated_monitor",
+        "to_state": "escalated_monitor",
+        "trigger_type": "session_finalized",
+        "detail": "run_kind=replay"
+      }
+    ]
+  }
+}

@@ -1,0 +1,1 @@
+Static mock data for the LifeLine help-bot simulation: scripted Urdu conversation branches, replay logs with expectations and latency metrics, cached TTS audio, and voice/photo assets used to drive and validate incident triage scenarios.

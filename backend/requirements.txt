@@ -1,0 +1,5 @@
+﻿dashscope>=1.20.0
+python-dotenv>=1.0.0
+google-genai>=2.19.0
+sounddevice>=0.5.0
+soundfile>=0.13.0

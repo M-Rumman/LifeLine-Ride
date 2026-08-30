@@ -1,0 +1,43 @@
+{
+  "severity_tier": "critical",
+  "injury_type_flags": [
+    "machine_entanglement",
+    "heavy_bleeding",
+    "traumatic_amputation"
+  ],
+  "voice_transcript": "میرے بھائی کو مدد کی سخت جلدی ضرورت ہے اس کا ہاتھ مشین میں آگیا وہ مشین میں کام کر رہا تھا اس کا ہاتھ مشین میں آگیا اس کو بہت بڑا زخم ہو چکا ہے انگلی پر جلدی کوئی مدد بھیجو۔",
+  "triage_signals": [
+    {
+      "source": "stt",
+      "provider": "gemini",
+      "status": "ok",
+      "detail": "Live Urdu transcription (gemini-3.5-flash, Phase 4 run)"
+    },
+    {
+      "source": "vision",
+      "provider": "gemini",
+      "status": "ok",
+      "detail": {
+        "injury_classification": "heavy_bleeding",
+        "apparent_severity": "critical",
+        "confidence": 0.95,
+        "visible_signals": [
+          "Severe traumatic injury/partial amputation of the middle finger with exposed deep tissue and bone structure",
+          "Heavy, dark red blood pooling on the hand and clothing",
+          "Lacerations on the back of the hand"
+        ],
+        "image_usable": true
+      }
+    },
+    {
+      "source": "classifier",
+      "provider": "gemini",
+      "status": "ok",
+      "detail": [
+        "Machine entanglement + traumatic amputation reported and visible",
+        "Heavy bleeding visible in photo",
+        "Both sources agree: critical"
+      ]
+    }
+  ]
+}
