@@ -3,11 +3,11 @@ schema_version: 1
 locale: en-US
 branch: main
 nodes_managed: true
-exported_at: "2026-08-30T09:24:27Z"
+exported_at: "2026-08-30T10:12:52Z"
 modules:
     "":
-        dir_name: LifeLine Ride — Village Emergency Response System
-        title: LifeLine Ride — Village Emergency Response System
+        dir_name: LifeLine Ride Hackathon Workspace
+        title: LifeLine Ride Hackathon Workspace
         scope:
             - PROJECT.md
             - DEMO_SCRIPT.md
@@ -22,8 +22,8 @@ modules:
         depends_on: []
         related_to: []
     backend:
-        dir_name: LifeLine Ride Backend (Triage + Help Bot Orchestration)
-        title: LifeLine Ride Backend (Triage + Help Bot Orchestration)
+        dir_name: LifeLine Ride Backend Orchestration
+        title: LifeLine Ride Backend Orchestration
         scope:
             - backend/
         source_files: []
@@ -45,8 +45,8 @@ modules:
         related_to:
             - path: mockdata
     mockdata:
-        dir_name: HelpBot Simulation Scripts & Media Assets
-        title: HelpBot Simulation Scripts & Media Assets
+        dir_name: Help-Bot Simulation Mock Data & Replay Fixtures
+        title: Help-Bot Simulation Mock Data & Replay Fixtures
         scope:
             - mockdata/
         source_files: []

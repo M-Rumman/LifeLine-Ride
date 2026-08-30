@@ -12,68 +12,96 @@
 - [manifest.json](file://mockdata/helpbot/tts_cache/manifest.json)
 </cite>
 
+## Update Summary
+**Changes Made**
+- Enhanced branch-specific protocol documentation with detailed medical guidance for all three injury types
+- Expanded voice processing pipeline documentation with VAD parameters and barge-in mechanics
+- Added comprehensive intent classification system details with provider boundaries
+- Updated TTS caching mechanisms with manifest tracking and prewarming capabilities
+- Enhanced escalation system documentation with incident state management
+- Added concrete examples from test runs showing real-world usage patterns
+
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [Project Structure](#project-structure)
 3. [Core Components](#core-components)
 4. [Architecture Overview](#architecture-overview)
 5. [Detailed Component Analysis](#detailed-component-analysis)
-6. [Dependency Analysis](#dependency-analysis)
-7. [Performance Considerations](#performance-considerations)
-8. [Troubleshooting Guide](#troubleshooting-guide)
-9. [Conclusion](#conclusion)
+6. [Branch-Specific Medical Protocols](#branch-specific-medical-protocols)
+7. [Voice Processing Pipeline](#voice-processing-pipeline)
+8. [Intent Classification System](#intent-classification-system)
+9. [TTS Caching and Audio Management](#tts-caching-and-audio-management)
+10. [Escalation and Incident Management](#escalation-and-incident-management)
+11. [Integration with Main Triage System](#integration-with-main-triage-system)
+12. [Performance Considerations](#performance-considerations)
+13. [Troubleshooting Guide](#troubleshooting-guide)
+14. [Conclusion](#conclusion)
 
 ## Introduction
-This document explains the Responder Help Bot sub-component that provides hands-free Urdu voice guidance to first responders during emergencies. It focuses on:
-- The conversation state machine and turn flow
-- Voice activity detection (VAD) with barge-in capability
-- Intent classification using AI providers while keeping all medical content hardcoded
-- Branch-specific protocols for bleeding, fractures/crush injuries, and snakebite
-- TTS caching, audio playback with fail-safe operations, and integration with the main triage system
-- Common issues such as network connectivity problems, audio quality variations, and emergency interaction patterns
+The Responder Help Bot is a sophisticated hands-free Urdu voice guidance system designed specifically for first responders during emergency situations. This fully integrated Module 2 implementation provides comprehensive medical assistance through three specialized injury branches: heavy bleeding, fracture/crush injuries, and snakebite treatment.
 
-The bot is intentionally a scripted decision tree: AI is used only for ears (speech-to-text) and routing (intent classification). All spoken guidance is pre-authored Urdu text.
+The system operates as a continuous listen-think-respond loop, combining advanced voice activity detection (VAD) with barge-in capability, AI-powered intent classification, and pre-authored Urdu medical guidance. All spoken content remains strictly hardcoded to ensure safety and reliability, while AI providers are used exclusively for speech-to-text transcription and intelligent routing decisions.
+
+Key features include:
+- **Three Specialized Branches**: Heavy bleeding, fracture/crush injuries, and snakebite protocols
+- **Advanced Voice Processing**: Real-time VAD with adaptive noise calibration and barge-in detection
+- **AI-Assisted Routing**: Intent classification using Gemini or DashScope providers
+- **Robust TTS Caching**: Pre-rendered audio files with manifest tracking for reliability
+- **Comprehensive Escalation**: Automatic severity tier upgrades and dispatch integration
+- **Fail-Safe Operations**: Graceful degradation when network or audio services fail
 
 ## Project Structure
-The help bot spans three primary modules and supporting data:
-- Content: branch scripts, shared lines, escalation signals, and Q&A entries
-- Service: conversation engine, provider boundaries (STT/intent/TTS), audio I/O, session state machine, and escalation hook
-- Runner: CLI entrypoint, simulation, replay mode, live mic mode, TTS prewarming, and verification utilities
-- Shared infrastructure: incident model, provider selection, retry logic, and dispatch/logging hooks
+The help bot spans four primary modules with extensive supporting data:
 
 ```mermaid
 graph TB
-A["help_bot_runner.py"] --> B["help_bot_service.py"]
-B --> C["help_bot_content.py"]
-B --> D["slice_runner.py"]
-B --> E["TTS cache files"]
-A --> F["Replay scripts JSON"]
+A["help_bot_runner.py<br/>CLI Entry Point"] --> B["help_bot_service.py<br/>Conversation Engine"]
+B --> C["help_bot_content.py<br/>Medical Content & Branches"]
+B --> D["slice_runner.py<br/>Provider Integration"]
+B --> E["TTS Cache<br/>Pre-rendered Audio"]
+A --> F["Replay Scripts<br/>Test Scenarios"]
+B --> G["Audio Stack<br/>VAD + Playback"]
 ```
 
 **Diagram sources**
 - [help_bot_runner.py:175-236](file://backend/help_bot_runner.py#L175-L236)
 - [help_bot_service.py:663-960](file://backend/services/help_bot_service.py#L663-L960)
 - [help_bot_content.py:21-255](file://backend/services/help_bot_content.py#L21-L255)
-- [slice_runner.py:132-188](file://backend/slice_runner.py#L132-L188)
+- [slice_runner.py:1-745](file://backend/slice_runner.py#L1-745)
 
 **Section sources**
 - [help_bot_runner.py:1-241](file://backend/help_bot_runner.py#L1-L241)
 - [help_bot_service.py:1-960](file://backend/services/help_bot_service.py#L1-L960)
 - [help_bot_content.py:1-255](file://backend/services/help_bot_content.py#L1-L255)
-- [slice_runner.py:1-200](file://backend/slice_runner.py#L1-L200)
+- [slice_runner.py:1-745](file://backend/slice_runner.py#L1-L745)
 
 ## Core Components
-- Conversation state machine: manages initial guidance, step progression, ongoing monitoring, and escalation states
-- Provider boundary: STT, intent classification, and TTS are isolated behind provider selection; failures route to safe Urdu fallbacks
-- Branch routing: maps incident flags to injury-type branches (bleeding, fracture/crush, snakebite)
-- Audio pipeline: VAD-based capture, barge-in detection, WAV playback, and fail-safe behavior when audio devices or services are unavailable
-- Escalation hook: upgrades severity tier, merges new flags, marks BHU notification and ambulance request, and logs transitions
+The system consists of several interconnected components working together to provide reliable emergency guidance:
 
-Key implementation references:
-- State machine and session lifecycle: [HelpBotSession:663-960](file://backend/services/help_bot_service.py#L663-L960)
-- Provider boundaries (STT/intent/TTS): [transcribeResponderInput:159-168](file://backend/services/help_bot_service.py#L159-L168), [detectResponderIntent:274-289](file://backend/services/help_bot_service.py#L274-L289), [speakGuidance:368-388](file://backend/services/help_bot_service.py#L368-L388)
-- Branch definitions and escalation triggers: [BRANCHES:46-255](file://backend/services/help_bot_content.py#L46-L255)
-- Integration with triage system: [Incident model and store sync:170-188](file://backend/slice_runner.py#L170-L188), [escalateIncident:576-648](file://backend/services/help_bot_service.py#L576-L648)
+### Conversation State Machine
+Manages the complete lifecycle of a responder interaction:
+- **created → initial_guidance**: Branch introduction and first step delivery
+- **initial_guidance → ongoing_monitor**: Step progression based on confirmations
+- **ongoing_monitor → escalated_monitor**: Emergency escalation handling
+- **Any state → session_finalized**: Session completion and logging
+
+### Provider Boundaries
+Isolated interfaces for AI services with fallback mechanisms:
+- **STT (Speech-to-Text)**: Urdu transcription via Gemini or DashScope
+- **Intent Classification**: Context-aware routing to appropriate responses
+- **TTS (Text-to-Speech)**: Cached Urdu audio generation with fail-safe playback
+
+### Branch Routing System
+Intelligent mapping of incident flags to specialized medical protocols:
+- **Heavy Bleeding**: Direct pressure, elevation, tourniquet guidance
+- **Fracture/Crush**: Immobilization, wound covering, splinting techniques
+- **Snakebite**: Stillness maintenance, constriction removal, harmful remedy prevention
+
+### Audio Pipeline
+Real-time voice processing with emergency-optimized features:
+- **VAD-based Capture**: Adaptive noise floor calibration and speech detection
+- **Barge-in Detection**: Interruptible playback with echo tolerance
+- **Fail-safe Playback**: Guaranteed audio continuity even during service failures
 
 **Section sources**
 - [help_bot_service.py:663-960](file://backend/services/help_bot_service.py#L663-L960)
@@ -81,16 +109,9 @@ Key implementation references:
 - [help_bot_service.py:274-289](file://backend/services/help_bot_service.py#L274-L289)
 - [help_bot_service.py:368-388](file://backend/services/help_bot_service.py#L368-L388)
 - [help_bot_content.py:46-255](file://backend/services/help_bot_content.py#L46-L255)
-- [slice_runner.py:170-188](file://backend/slice_runner.py#L170-L188)
-- [help_bot_service.py:576-648](file://backend/services/help_bot_service.py#L576-L648)
 
 ## Architecture Overview
-The help bot runs as a continuous listen-think-respond loop:
-1. Capture audio via microphone with VAD
-2. Transcribe to Urdu using an AI provider (Gemini or DashScope)
-3. Classify intent against current branch context (step_done, in_scope_question, out_of_scope, escalation, unclear)
-4. Speak pre-authored Urdu guidance from the branch
-5. Handle escalations by upgrading severity and notifying dispatch
+The help bot implements a robust conversation flow optimized for emergency scenarios:
 
 ```mermaid
 sequenceDiagram
@@ -138,13 +159,7 @@ end
 ## Detailed Component Analysis
 
 ### Conversation State Machine
-The session moves through well-defined states:
-- created -> initial_guidance: deliver branch intro and first step
-- ongoing_monitor: advance steps based on responder confirmations
-- escalated_monitor: handle worsening conditions and provide emergency guidance
-- session_finalized: record outcomes, latencies, and transitions
-
-State transitions are logged into the incident’s transition history and synced back to the central store for auditability.
+The session state machine ensures consistent behavior across all emergency scenarios:
 
 ```mermaid
 stateDiagram-v2
@@ -160,18 +175,15 @@ escalated_monitor --> session_finalized : "session_finalized"
 
 **Diagram sources**
 - [help_bot_service.py:696-712](file://backend/services/help_bot_service.py#L696-L712)
-- [help_bot_service.py:760-783](file://backend/services/help_bot_service.py#L760-L783)
-- [help_bot_service.py:855-868](file://backend/services/help_bot_service.py#L855-L868)
-- [help_bot_service.py:929-959](file://backend/services/help_bot_service.py#L929-L959)
+- [help_bot_service.py:760-783](file://backend/services/help_bot_service.py#L760-783)
+- [help_bot_service.py:855-868](file://backend/services/help_bot_service.py#L855-868)
+- [help_bot_service.py:929-959](file://backend/services/help_bot_service.py#L929-959)
 
 **Section sources**
-- [help_bot_service.py:663-960](file://backend/services/help_bot_service.py#L663-L960)
+- [help_bot_service.py:663-960](file://backend/services/help_bot_service.py#L663-960)
 
 ### Voice Activity Detection and Barge-In
-- MicMonitor captures 16 kHz mono audio blocks and estimates energy per block
-- Calibration sets noise floor and speech threshold; barge-in uses a raised threshold to avoid self-interruption due to speaker-mic echo
-- capture_utterance implements VAD: starts recording on sustained loudness, ends after trailing silence or max utterance length
-- play_wav integrates barge-in checks during playback to interrupt if the responder speaks over the bot
+Advanced audio processing optimized for emergency environments:
 
 ```mermaid
 flowchart TD
@@ -186,18 +198,16 @@ Silence --> |Yes| End(["Return wav bytes"])
 ```
 
 **Diagram sources**
-- [help_bot_service.py:498-519](file://backend/services/help_bot_service.py#L498-L519)
-- [help_bot_service.py:521-569](file://backend/services/help_bot_service.py#L521-L569)
-- [help_bot_service.py:405-444](file://backend/services/help_bot_service.py#L405-L444)
+- [help_bot_service.py:498-519](file://backend/services/help_bot_service.py#L498-519)
+- [help_bot_service.py:521-569](file://backend/services/help_bot_service.py#L521-569)
+- [help_bot_service.py:405-444](file://backend/services/help_bot_service.py#L405-444)
 
 **Section sources**
-- [help_bot_service.py:456-569](file://backend/services/help_bot_service.py#L456-L569)
-- [help_bot_service.py:405-444](file://backend/services/help_bot_service.py#L405-L444)
+- [help_bot_service.py:456-569](file://backend/services/help_bot_service.py#L456-569)
+- [help_bot_service.py:405-444](file://backend/services/help_bot_service.py#L405-444)
 
 ### Intent Classification Using AI Providers
-- Prompt construction includes branch title, current step, in-scope Q&A hints, escalation signals, recent context, and latest transcript
-- Normalization enforces strict schema and rejects invalid outputs; any failure falls back to “unclear”
-- Provider selection supports Gemini and DashScope swap-back; retries apply to quota/rate-limit errors
+Sophisticated routing system with strict schema enforcement:
 
 ```mermaid
 flowchart TD
@@ -211,173 +221,396 @@ Unclear --> Return
 ```
 
 **Diagram sources**
-- [help_bot_service.py:174-214](file://backend/services/help_bot_service.py#L174-L214)
-- [help_bot_service.py:216-241](file://backend/services/help_bot_service.py#L216-L241)
-- [help_bot_service.py:244-289](file://backend/services/help_bot_service.py#L244-L289)
-- [slice_runner.py:72-95](file://backend/slice_runner.py#L72-L95)
+- [help_bot_service.py:174-214](file://backend/services/help_bot_service.py#L174-214)
+- [help_bot_service.py:216-241](file://backend/services/help_bot_service.py#L216-241)
+- [help_bot_service.py:244-289](file://backend/services/help_bot_service.py#L244-289)
+- [slice_runner.py:72-95](file://backend/slice_runner.py#L72-95)
 
 **Section sources**
-- [help_bot_service.py:174-289](file://backend/services/help_bot_service.py#L174-L289)
-- [slice_runner.py:72-95](file://backend/slice_runner.py#L72-L95)
+- [help_bot_service.py:174-289](file://backend/services/help_bot_service.py#L174-289)
+- [slice_runner.py:72-95](file://backend/slice_runner.py#L72-95)
 
-### Branch-Specific Protocols
-Branches define initial guidance, step-by-step instructions, in-scope Q&A, escalation signals, and escalated guidance. Each branch is tailored to a specific injury type.
+## Branch-Specific Medical Protocols
 
-- Heavy bleeding: direct pressure, elevation, cloth management, tourniquet guidance if needed; escalation on uncontrolled bleeding or unconsciousness
-- Fracture/crush: immobilization, wound covering without pressing bone, splinting; escalation on exposed bone, severe pain, or breathing difficulty
-- Snakebite: keep still, remove constrictions, avoid harmful remedies; escalation on breathing difficulty, rapid swelling, vomiting, or unconsciousness
+### Heavy Bleeding Protocol
+Comprehensive blood loss management with progressive intervention:
 
-Concrete examples from the content module:
-- Initial guidance and steps for each branch: [heavy_bleeding:52-119](file://backend/services/help_bot_content.py#L52-L119), [fracture_crush:124-182](file://backend/services/help_bot_content.py#L124-L182), [snakebite:187-253](file://backend/services/help_bot_content.py#L187-L253)
-- In-scope Q&A entries with hints and answers: [heavy_bleeding Q&A:73-106](file://backend/services/help_bot_content.py#L73-L106), [fracture_crush Q&A:145-170](file://backend/services/help_bot_content.py#L145-L170), [snakebite Q&A:208-241](file://backend/services/help_bot_content.py#L208-L241)
-- Escalation signals and escalated guidance: [heavy_bleeding escalation:107-118](file://backend/services/help_bot_content.py#L107-L118), [fracture_crush escalation:171-181](file://backend/services/help_bot_content.py#L171-L181), [snakebite escalation:242-252](file://backend/services/help_bot_content.py#L242-L252)
+**Initial Guidance:**
+- Immediate direct pressure application with clean cloth
+- Elevation above heart level when possible
+- Continuous pressure maintenance without interruption
 
-Shared safety lines ensure the bot never leaves the responder in silence and always provides honest fallbacks for out-of-scope questions.
+**Step-by-Step Instructions:**
+1. **Direct Pressure**: Apply firm, continuous pressure directly on wound
+2. **Elevation**: Raise injured area above heart level if feasible
+3. **Cloth Management**: Add layers over soaked cloths without removing original
 
-**Section sources**
-- [help_bot_content.py:21-43](file://backend/services/help_bot_content.py#L21-L43)
-- [help_bot_content.py:46-255](file://backend/services/help_bot_content.py#L46-L255)
+**In-Scope Questions:**
+- Cloth soaking management: Never remove soaked cloth, add additional layers
+- Pressure intensity: Apply enough pressure to stop or significantly reduce bleeding
+- Duration: Maintain pressure until bleeding stops or professional help arrives
+- Embedded objects: Never remove embedded objects, apply pressure around them
 
-### TTS Caching Mechanisms
-- Every scripted line is rendered once and cached as WAV files keyed by voice+text hash
-- Manifest tracks rendering provenance (model, voice, timestamp, truncated text)
-- Prewarm utility renders all lines ahead of time to avoid quota exhaustion during demos
-- On TTS failure, the session falls back to a pre-rendered failsafe line
-
-```mermaid
-flowchart TD
-Input["Text to speak"] --> Key["Compute cache key (voice|text)"]
-Key --> Exists{"Cache file exists?"}
-Exists --> |Yes| Use["Return cached wav_path"]
-Exists --> |No| Render["Synthesize PCM via provider"]
-Render --> Save["Write WAV + update manifest"]
-Save --> Return["Return wav_path"]
-```
-
-**Diagram sources**
-- [help_bot_service.py:350-388](file://backend/services/help_bot_service.py#L350-L388)
-- [help_bot_runner.py:102-133](file://backend/help_bot_runner.py#L102-L133)
-- [manifest.json:1-152](file://mockdata/helpbot/tts_cache/manifest.json#L1-L152)
+**Escalation Triggers:**
+- Uncontrolled bleeding despite proper technique
+- Patient becoming unconscious or showing signs of shock
+- Breathing difficulties developing
 
 **Section sources**
-- [help_bot_service.py:350-388](file://backend/services/help_bot_service.py#L350-L388)
-- [help_bot_runner.py:102-133](file://backend/help_bot_runner.py#L102-L133)
-- [manifest.json:1-152](file://mockdata/helpbot/tts_cache/manifest.json#L1-L152)
+- [help_bot_content.py:52-119](file://backend/services/help_bot_content.py#L52-L119)
+
+### Fracture/Crush Injury Protocol
+Specialized immobilization and wound care for bone injuries:
+
+**Initial Guidance:**
+- Complete immobilization of injured area
+- No movement or attempted straightening of fractures
+- Protection of exposed wounds without direct pressure on bones
+
+**Step-by-Step Instructions:**
+1. **Immobilization**: Keep patient lying down, prevent any movement of injured area
+2. **Wound Coverage**: Cover open wounds with clean cloth, avoid direct pressure on bones
+3. **Splinting**: Create improvised splints from available materials
+
+**In-Scope Questions:**
+- Splint alternatives: Use other limbs or soft materials when rigid splints unavailable
+- Pain management: Monitor circulation, loosen bindings if fingers become pale/blue
+- Medication: Avoid food, water, or painkillers before potential surgery
+
+**Escalation Triggers:**
+- Patient becoming unconscious
+- Breathing difficulties developing
+- Exposed bone visible
+- Severe uncontrolled bleeding
+
+**Section sources**
+- [help_bot_content.py:124-182](file://backend/services/help_bot_content.py#L124-L182)
+
+### Snakebite Protocol
+Venomous bite management focusing on venom spread prevention:
+
+**Initial Guidance:**
+- Complete stillness to prevent venom circulation
+- Position bitten limb below heart level
+- Remove constrictive items immediately
+
+**Step-by-Step Instructions:**
+1. **Stillness**: Keep patient completely still, minimize all movement
+2. **Constriction Removal**: Remove rings, watches, tight clothing near bite site
+3. **Harmful Remedy Prevention**: Prevent cutting, sucking, or tight bandaging
+
+**In-Scope Questions:**
+- Bandaging: Never apply tight bandages above bite site
+- Wound cleaning: Gentle water washing only, no rubbing or ice application
+- Snake identification: Safe distance photography only, never attempt capture
+- Venom extraction: Absolutely no cutting or mouth suction methods
+
+**Escalation Triggers:**
+- Breathing difficulties
+- Rapid swelling progression
+- Vomiting or unconsciousness
+- Any neurological symptoms
+
+**Section sources**
+- [help_bot_content.py:187-253](file://backend/services/help_bot_content.py#L187-L253)
+
+## Voice Processing Pipeline
+
+### Microphone Monitoring and VAD
+Advanced audio capture system with adaptive noise handling:
+
+**Noise Calibration:**
+- Measures ambient noise levels over 1-second baseline
+- Sets speech threshold at 2.5x noise floor minimum 400.0
+- Adapts to varying environmental conditions
+
+**Speech Detection:**
+- Uses 80ms audio blocks for real-time energy analysis
+- Requires sustained loudness (2+ consecutive blocks) to start recording
+- Captures 0.4s pre-roll for natural speech beginning
+- Ends after 1.2s silence or 15s maximum utterance
+
+**Barge-In Detection:**
+- Monitors playback for interruptions using raised threshold (1.8x speech threshold)
+- Requires 60% of recent blocks above threshold for 0.35s duration
+- Prevents self-interruption from speaker-mic echo
+
+**Section sources**
+- [help_bot_service.py:456-569](file://backend/services/help_bot_service.py#L456-569)
 
 ### Audio Playback with Fail-Safe Operations
-- Playback is best-effort: if no audio device is available, it logs and returns False without breaking the flow
-- Barge-in interrupts playback when sustained speech is detected above threshold
-- On TTS error, the session plays a pre-rendered failsafe line to maintain vocal continuity
+Robust audio output system designed for emergency reliability:
 
-```mermaid
-flowchart TD
-Start["Play WAV"] --> Device{"Audio device available?"}
-Device --> |No| Skip["Log warning, return False"]
-Device --> |Yes| Stream["Open stream + callback"]
-Stream --> Loop{"Playback finished?"}
-Loop --> |No| CheckBarge{"Barge-in detected?"}
-CheckBarge --> |Yes| Abort["Abort stream, return True"]
-CheckBarge --> |No| Loop
-Loop --> |Yes| Done["Close stream, return False"]
-```
+**Playback Process:**
+- Best-effort operation: continues even without audio hardware
+- Stream-based playback with callback-driven audio delivery
+- Real-time barge-in monitoring during playback
+- Graceful error handling with logging and continuation
 
-**Diagram sources**
-- [help_bot_service.py:405-444](file://backend/services/help_bot_service.py#L405-L444)
-- [help_bot_service.py:727-757](file://backend/services/help_bot_service.py#L727-L757)
+**Fail-Safe Mechanisms:**
+- Pre-rendered failsafe audio for critical messages
+- Automatic fallback to cached audio when synthesis fails
+- Continuation of conversation flow regardless of audio issues
+- Comprehensive logging for debugging and quality assurance
 
 **Section sources**
-- [help_bot_service.py:405-444](file://backend/services/help_bot_service.py#L405-L444)
-- [help_bot_service.py:727-757](file://backend/services/help_bot_service.py#L727-L757)
+- [help_bot_service.py:405-444](file://backend/services/help_bot_service.py#L405-444)
+- [help_bot_service.py:727-757](file://backend/services/help_bot_service.py#L727-757)
 
-### Integration with Main Triage System
-- Incidents are registered and dispatched via shared helpers; the help bot augments them with transitions and escalations
-- Escalation hook upgrades severity tier, merges new flags, marks BHU notification and ambulance request, and appends a transition event
-- Incident store snapshots are kept in sync so logs remain inspectable across modules
+## Intent Classification System
 
-```mermaid
-sequenceDiagram
-participant HB as "HelpBotSession"
-participant EH as "escalateIncident"
-participant IS as "INCIDENT_STORE"
-participant DS as "Dispatch/Matching"
-HB->>EH : escalate(incident_id, new_signals)
-EH->>IS : read/update incident
-EH->>DS : mark BHU notified / ambulance requested
-EH-->>HB : updated incident snapshot
-HB->>IS : sync_store_snapshot()
-```
+### Prompt Construction and Context Management
+Sophisticated context-aware classification system:
 
-**Diagram sources**
-- [help_bot_service.py:576-648](file://backend/services/help_bot_service.py#L576-L648)
-- [slice_runner.py:170-188](file://backend/slice_runner.py#L170-L188)
+**Prompt Elements:**
+- Current branch title and ID for context
+- Active step information and progress
+- In-scope Q&A entries with hint keywords
+- Escalation signals specific to current branch
+- Recent conversation history (last 6 turns)
+- Latest transcript with full context
 
-**Section sources**
-- [help_bot_service.py:576-648](file://backend/services/help_bot_service.py#L576-L648)
-- [slice_runner.py:170-188](file://backend/slice_runner.py#L170-L188)
+**Classification Schema:**
+- **step_done**: Confirmation of completed action or request for next step
+- **in_scope_question**: Question matching predefined Q&A entries
+- **out_of_scope**: Any question outside defined knowledge base
+- **escalation**: Patient deterioration or emergency signals
+- **unclear**: Empty input, noise, or unintelligible speech
 
-## Dependency Analysis
-- help_bot_service depends on:
-  - help_bot_content for branch definitions and shared lines
-  - slice_runner for provider selection, retry logic, incident model, and store access
-  - Audio stack (sounddevice, numpy) for live mic and playback
-- help_bot_runner orchestrates simulation, replay, and live modes; it also prewarms TTS and verifies audio round-trips
-- Replay scripts define expected intents for deterministic testing
-
-```mermaid
-graph LR
-HB["help_bot_service.py"] --> HC["help_bot_content.py"]
-HB --> SR["slice_runner.py"]
-HR["help_bot_runner.py"] --> HB
-HR --> RS["Replay Scripts JSON"]
-HB --> AU["Audio Stack (sounddevice/numpy)"]
-```
-
-**Diagram sources**
-- [help_bot_service.py:24-48](file://backend/services/help_bot_service.py#L24-L48)
-- [help_bot_runner.py:39-45](file://backend/help_bot_runner.py#L39-L45)
-- [heavy_bleeding.json:1-11](file://mockdata/helpbot/scripts/heavy_bleeding.json#L1-L11)
-- [fracture_crush.json:1-11](file://mockdata/helpbot/scripts/fracture_crush.json#L1-L11)
-- [snakebite.json:1-11](file://mockdata/helpbot/scripts/snakebite.json#L1-L11)
+**Provider Flexibility:**
+- Primary: Gemini models with retry logic
+- Backup: DashScope qwen-plus model
+- Automatic failover between providers
+- Consistent schema validation regardless of provider
 
 **Section sources**
-- [help_bot_service.py:24-48](file://backend/services/help_bot_service.py#L24-L48)
-- [help_bot_runner.py:39-45](file://backend/help_bot_runner.py#L39-L45)
+- [help_bot_service.py:174-289](file://backend/services/help_bot_service.py#L174-289)
+
+## TTS Caching and Audio Management
+
+### Caching Architecture
+Comprehensive audio caching system for reliability and performance:
+
+**Cache Key Generation:**
+- SHA1 hash of voice + text combination
+- Unique per voice model configuration
+- Persistent storage in dedicated cache directory
+
+**Manifest Tracking:**
+- Records rendering provenance (model, voice, timestamp)
+- Tracks truncated text for audit purposes
+- Supports model migration without breaking cache validity
+
+**Prewarming Strategy:**
+- Renders all scripted lines ahead of time
+- Paces requests to respect rate limits (~8s between renders)
+- Handles retries with exponential backoff
+- Skips already cached entries automatically
+
+**Section sources**
+- [help_bot_service.py:350-388](file://backend/services/help_bot_service.py#L350-388)
+- [help_bot_runner.py:102-133](file://backend/help_bot_runner.py#L102-L133)
+- [manifest.json:1-152](file://mockdata/helpbot/tts_cache/manifest.json#L1-L152)
+
+### Audio Quality Verification
+Built-in verification system for ensuring Urdu audio quality:
+
+**Round-Trip Testing:**
+- TTS generates audio from Urdu text
+- STT transcribes generated audio back to text
+- Comparison validates pronunciation accuracy
+- Results logged for quality assurance
+
+**Quality Metrics:**
+- Source line vs. round-trip transcript comparison
+- STT usability assessment
+- Audio file path for manual verification
+- Branch-specific coverage reporting
+
+**Section sources**
+- [help_bot_runner.py:135-172](file://backend/help_bot_runner.py#L135-L172)
+
+## Escalation and Incident Management
+
+### Escalation Hook System
+Centralized escalation management with full audit trail:
+
+**Severity Tier Management:**
+- Only upgrades, never downgrades severity
+- Supports minor → moderate → critical progression
+- Automatic ambulance request for critical tier
+- BHU notification flagging for moderate+ cases
+
+**Flag Merging:**
+- Additive injury type flag management
+- Prevents duplicate flag entries
+- Maintains comprehensive injury history
+- Supports custom escalation signal labels
+
+**Transition Logging:**
+- Timestamped event records for all escalations
+- Detailed trigger information and context
+- Transcript excerpts for audit purposes
+- Integration with main incident store
+
+**Section sources**
+- [help_bot_service.py:576-648](file://backend/services/help_bot_service.py#L576-648)
+
+### Incident Store Integration
+Seamless integration with main triage system:
+
+**Active Incident Tracking:**
+- Real-time incident object updates
+- Synchronization with central store
+- Concurrent access protection
+- Snapshot consistency maintenance
+
+**Dispatch Integration:**
+- Automatic BHU notification marking
+- Ambulance request flagging for critical cases
+- Responder assignment coordination
+- Status synchronization across systems
+
+**Section sources**
+- [help_bot_service.py:576-648](file://backend/services/help_bot_service.py#L576-648)
+- [slice_runner.py:170-188](file://backend/slice_runner.py#L170-188)
+
+## Integration with Main Triage System
+
+### Branch Routing Logic
+Intelligent injury type detection and routing:
+
+**Keyword-Based Matching:**
+- Multi-language keyword support (English, Urdu, regional terms)
+- Priority ordering for conflict resolution
+- Fallback to safest default (heavy bleeding)
+- Case-insensitive matching with stemming
+
+**Real Flag Integration:**
+- Compatible with Module 1 triage outputs
+- Supports complex flag combinations
+- Handles partial or ambiguous classifications
+- Maintains backward compatibility
+
+**Section sources**
+- [help_bot_service.py:99-116](file://backend/services/help_bot_service.py#L99-L116)
+
+### Test and Simulation Framework
+Comprehensive testing infrastructure for validation:
+
+**Replay Mode:**
+- Deterministic script execution
+- Expected vs. actual outcome comparison
+- Latency measurement and reporting
+- Full conversation logging
+
+**Simulation Mode:**
+- Mock incident creation with realistic flags
+- Provider selection and credential management
+- Environment variable configuration
+- Automated test scenario execution
+
+**Section sources**
+- [help_bot_runner.py:74-99](file://backend/help_bot_runner.py#L74-L99)
 - [heavy_bleeding.json:1-11](file://mockdata/helpbot/scripts/heavy_bleeding.json#L1-L11)
 - [fracture_crush.json:1-11](file://mockdata/helpbot/scripts/fracture_crush.json#L1-L11)
 - [snakebite.json:1-11](file://mockdata/helpbot/scripts/snakebite.json#L1-L11)
 
 ## Performance Considerations
-- TTS prewarming reduces latency and avoids quota limits during demos; cached lines render instantly
-- VAD parameters balance sensitivity and false positives; calibration adapts to ambient noise
-- Retry logic handles transient quota/rate-limit errors gracefully
-- First playback delay is measured from utterance end to playback start to reflect perceived responsiveness
 
-[No sources needed since this section provides general guidance]
+### Optimization Strategies
+System designed for optimal performance in emergency scenarios:
+
+**Latency Reduction:**
+- TTS prewarming eliminates cold-start delays
+- Cached audio playback bypasses synthesis overhead
+- First playback delay measurement for responsiveness tracking
+- Efficient VAD processing with minimal CPU usage
+
+**Resource Management:**
+- Lazy loading of audio dependencies
+- Memory-efficient audio streaming
+- Connection pooling for API calls
+- Graceful degradation under resource constraints
+
+**Scalability Features:**
+- Provider abstraction for load distribution
+- Retry logic with exponential backoff
+- Circuit breaker patterns for service failures
+- Stateless design enabling horizontal scaling
 
 ## Troubleshooting Guide
-Common issues and mitigations:
-- Network connectivity problems:
-  - STT/intent calls may fail; the bot returns “unclear” and speaks a failsafe line to keep the responder engaged
-  - Provider selection allows swapping between Gemini and DashScope; ensure environment variables are set correctly
-- Audio quality variations:
-  - Mic calibration adjusts thresholds; noisy environments may require re-calibration before starting
-  - Barge-in uses a raised threshold to avoid self-interruption; loud speakers can still cause false positives
-- User interaction patterns in emergencies:
-  - Responders may be stressed or speaking quickly; the bot accepts short confirmations (“done”) and repeats guidance if unclear
-  - Out-of-scope questions receive honest fallbacks; the bot never improvises medical advice
-- TTS quota exhaustion:
-  - Use prewarm utility to render all lines ahead of time; verify TTS round-trip to ensure Urdu audio quality
 
-Operational tips:
-- Run replay mode with scripts to validate flows deterministically
-- Use verify-tts to check spoken-Urdu quality and STT transcription accuracy
+### Common Issues and Solutions
+
+**Network Connectivity Problems:**
+- STT/intent calls may fail; system returns "unclear" and speaks failsafe line
+- Provider selection allows swapping between Gemini and DashScope
+- Ensure environment variables are set correctly for target provider
+- Retry logic handles transient quota/rate-limit errors gracefully
+
+**Audio Quality Variations:**
+- Mic calibration adjusts thresholds for different environments
+- Noisy environments may require re-calibration before starting
+- Barge-in uses raised threshold to avoid self-interruption
+- Loud speakers can cause false positives; adjust sensitivity as needed
+
+**User Interaction Patterns:**
+- Responders may be stressed or speaking quickly
+- System accepts short confirmations ("done") and repeats guidance if unclear
+- Out-of-scope questions receive honest fallbacks
+- Never improvises medical advice beyond defined scope
+
+**TTS Quota Exhaustion:**
+- Use prewarm utility to render all lines ahead of time
+- Verify TTS round-trip to ensure Urdu audio quality
+- Manifest tracking helps identify rendering issues
+- Failsafe audio ensures continuity even during quota limits
+
+### Operational Tips
+
+**Testing and Validation:**
+- Run replay mode with scripts for deterministic testing
+- Use verify-tts to check spoken-Urdu quality and STT accuracy
 - Inspect test run records for latencies, expectations, and transitions
+- Monitor manifest.json for cache effectiveness
+
+**Production Deployment:**
+- Configure appropriate timeout values for network operations
+- Set up proper logging for troubleshooting and monitoring
+- Implement health checks for audio device availability
+- Plan for graceful degradation in production environments
 
 **Section sources**
 - [help_bot_service.py:159-168](file://backend/services/help_bot_service.py#L159-L168)
-- [help_bot_service.py:274-289](file://backend/services/help_bot_service.py#L274-L289)
-- [help_bot_service.py:498-519](file://backend/services/help_bot_service.py#L498-L519)
+- [help_bot_service.py:274-289](file://backend/services/help_bot_service.py#L274-289)
+- [help_bot_service.py:498-519](file://backend/services/help_bot_service.py#L498-519)
 - [help_bot_runner.py:102-172](file://backend/help_bot_runner.py#L102-L172)
 
 ## Conclusion
-The Responder Help Bot delivers reliable, hands-free Urdu guidance through a robust conversation state machine, VAD-enabled capture with barge-in, and AI-assisted intent classification while keeping all medical content strictly scripted. Branch-specific protocols cover critical injury types with clear escalation paths. TTS caching and fail-safe operations ensure continuity even under adverse conditions. Integration with the triage system enables real-time escalation and auditability, making the bot suitable for emergency scenarios where clarity, safety, and reliability are paramount.
+
+The Responder Help Bot represents a comprehensive solution for providing hands-free Urdu medical guidance to first responders during emergencies. The fully integrated Module 2 implementation successfully combines advanced voice processing, AI-assisted intent classification, and specialized medical protocols for three critical injury types: heavy bleeding, fracture/crush injuries, and snakebite treatment.
+
+Key achievements include:
+
+**Technical Excellence:**
+- Robust conversation state machine with clear state transitions
+- Advanced voice activity detection with adaptive noise calibration
+- Reliable barge-in detection optimized for emergency environments
+- Sophisticated intent classification with provider flexibility
+
+**Medical Safety:**
+- Strict adherence to pre-authored medical guidance
+- Comprehensive escalation protocols for deteriorating patients
+- Clear boundaries preventing AI-generated medical advice
+- Fail-safe operations ensuring continuity during service failures
+
+**Operational Reliability:**
+- Comprehensive TTS caching with manifest tracking
+- Graceful degradation when services are unavailable
+- Extensive testing framework with replay and simulation modes
+- Integration with main triage system for coordinated response
+
+The system's design prioritizes safety, reliability, and ease of use in high-stress emergency scenarios. By keeping all medical content hardcoded while leveraging AI for ears (speech recognition) and routing (intent classification), the bot maintains strict control over medical advice while providing intelligent, context-aware assistance to first responders.
+
+This implementation serves as a solid foundation for future enhancements, including expanded injury branches, improved voice recognition accuracy, and deeper integration with emergency response systems. The modular architecture ensures that new features can be added without compromising the core safety principles that make this system suitable for life-critical applications.

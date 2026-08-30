@@ -1,1 +1,0 @@
-Root of the LifeLine Ride hackathon project that orchestrates a rural emergency triage and help-bot system across Python backend, mock simulation assets, and shared Urdu-first incident models.

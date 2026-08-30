@@ -1,6 +1,6 @@
 schema_version: 1
 module_path: mockdata
-title: HelpBot Simulation Scripts & Media Assets
+title: Help-Bot Simulation Mock Data & Replay Fixtures
 scope:
     - mockdata/
 source_files: []

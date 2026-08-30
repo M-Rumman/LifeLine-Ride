@@ -186,6 +186,14 @@ class Incident(BaseModel):
     # written by Module 1; appended by the help-bot session (branch entered,
     # steps, intents, escalations) for later Module 5 accountability review.
     help_bot_transitions: List[dict] = []
+    # ADDITIVE (Module 3): Dispatch event log — timestamped trace of every
+    # dispatch, fallback, BHU notification, ambulance request, escalation
+    # re-dispatch, and decline event. Mirrors help_bot_transitions discipline.
+    dispatch_events: List[dict] = []
+    # ADDITIVE (Module 3): How many times the fallback walker was triggered for
+    # this incident (responder timeout or explicit decline). Zero = primary
+    # responder dispatched and acknowledged (or BHU-only from the start).
+    dispatch_fallback_count: int = 0
 
 
 class Responder(BaseModel):

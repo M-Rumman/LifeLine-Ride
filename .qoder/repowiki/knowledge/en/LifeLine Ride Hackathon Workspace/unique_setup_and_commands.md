@@ -1,0 +1,1 @@
+Demo script in `DEMO_SCRIPT.md` walks through three flows — reporter registration via Urdu photo+voice, hands-free responder guidance with escalation, and BHU closure with points/coverage-gap analytics — using the backend against `mockdata` replay logs and cached audio.

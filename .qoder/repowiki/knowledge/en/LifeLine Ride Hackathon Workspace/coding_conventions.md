@@ -1,0 +1,2 @@
+- Incident state and severity tiers are modeled as shared data structures consumed by both the backend triage engine and the mock conversation replays.
+- Urdu voice interactions are represented as scripted conversation branches in `mockdata` that the backend's help-bot session drives during demos and tests.

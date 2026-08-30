@@ -1,0 +1,1 @@
+Static fixtures defining scripted Urdu help-bot conversation branches, replay logs with per-turn expectations and latency metrics, cached TTS audio, and voice/photo assets used to drive and validate incident triage scenarios.

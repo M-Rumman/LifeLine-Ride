@@ -1,1 +1,0 @@
-JSON fixtures for scenario/replay data; WAV audio cached from Google Gemini TTS models (`gemini-2.5-flash-preview-tts`, `gemini-3.1-flash-t-preview`) using the `Kore` voice; MP3 voice clips and PNG photos as media inputs.

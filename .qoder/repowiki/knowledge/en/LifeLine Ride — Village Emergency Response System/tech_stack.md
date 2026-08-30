@@ -1,1 +1,0 @@
-Alibaba Cloud DashScope/Qwen models (qwen-vl-max, qwen-plus, qwen-turbo), PostgreSQL/PolarDB with spatial lookup, Function Compute 3.0 serverless APIs, and OSS for encrypted temporary incident media; Python backend paired with Urdu voice/TTS assets in mockdata.

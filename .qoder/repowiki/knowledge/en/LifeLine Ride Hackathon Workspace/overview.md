@@ -1,0 +1,1 @@
+Root workspace that wires a Python triage/dispatch backend against Urdu help-bot simulation fixtures to demo a rural emergency response system across Modules 1–9.
