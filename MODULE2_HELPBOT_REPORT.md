@@ -1,6 +1,6 @@
 # Module 2 — Responder AI Help Bot: Final Report
 
-**Status:** Delivered. All code complete and verified; all three branches have live 5/5 test runs. One evidence item remains pending (snakebite branch-specific TTS audio, blocked by Gemini free-tier daily quota) — an automated task completes it at the next quota reset (see *Pending items*).
+**Status:** Delivered and evidence-complete. All code complete and verified; all three branches have clean live 5/5 test runs with full branch-specific TTS audio, all 39 scripted lines are rendered into the TTS cache, and all three branches pass the TTS→STT spoken-Urdu round-trip (completed 2026-08-31 after the Gemini quota reset — see §7).
 
 **First-aid content is DRAFT — it requires professional medical review before any use beyond the hackathon demo.** (Banner also present at the top of `backend/services/help_bot_content.py`.)
 
@@ -76,7 +76,7 @@ Deterministic replay scripts drove typed-Urdu responder turns through the live e
 |---|---|---|---|---|
 | heavy_bleeding | `INC-SIM-HEAVY-BLEEDING_replay_1788077207.json` | **5/5** (2× step_done, in-scope Q `cloth_soaked`, out-of-scope Q, escalation) | `uncontrolled_bleeding_and_unconsciousness` → critical, ambulance requested | 10/10 lines real TTS |
 | fracture_crush | `INC-SIM-FRACTURE-CRUSH_replay_1788079070.json` | **5/5** (step_done, 2× in-scope Q `no_splint` + `food_water`, out-of-scope Q, escalation) | `unconsciousness_breathing_difficulty` → **moderate → critical upgrade**, ambulance requested, flag merged | 9/10 real; 1 line failsafe-substituted (quota hit mid-run — recorded with `intended_line`) |
-| snakebite | `INC-SIM-SNAKEBITE_replay_1788080732.json` | **5/5** (2× step_done, in-scope Q `tie_cloth` — answered with the NO-tourniquet line, out-of-scope Q, escalation) | `سانس لینے میں تکلیف` → critical, ambulance requested | 1/10 real; 9 failsafe-substituted (TTS daily quota exhausted — see Pending items) |
+| snakebite | `INC-SIM-SNAKEBITE_replay_1788195379.json` | **5/5** (2× step_done, in-scope Q `tie_cloth` — answered with the NO-tourniquet line, out-of-scope Q, escalation) | `سانس لینے میں تکلیف` → critical, ambulance requested | 10/10 lines real TTS, all cache hits (supersedes the degraded 2026-08-30 run — see §7) |
 
 Every run: `branch_matched=True` on real Module 1 flags, 9 transitions logged to `help_bot_transitions` (branch entry → steps → questions → escalation → finalize).
 
@@ -86,13 +86,13 @@ Every run: `branch_matched=True` on real Module 1 flags, 9 transitions logged to
 |---|---|---|---|
 | heavy_bleeding (clean) | 4721 ms | **5740 ms** | 6689 ms |
 | fracture_crush (clean) | 4111 ms | **4392 ms** | 4971 ms |
-| snakebite (degraded-audio run) | 2283 ms | 18407 ms | 41812 ms — *not representative: each uncached line first attempted a doomed TTS call against an exhausted daily quota before fail-safe substitution* |
+| snakebite (clean) | 4647 ms | **5263 ms** | 5882 ms |
 
 Clean-run latency is **~4.4–5.7 s per turn**, dominated by intent classification (TTS lines were cache hits, adding ~0 s; a cold render adds ~5–15 s once per line — which is why `--prewarm-tts` exists). This is above the 2–4 s hope and is reported as-is: it is the honest price of a fully scripted, non-freeform Urdu pipeline on request-response APIs. In mic mode the perceived gap is partly masked because playback of multi-line responses streams line-by-line.
 
 ### Urdu intent-detection reliability
 
-- **15/15 intents classified correctly** across all clean runs (10 on `gemini-3.5-flash`, 5 on `gemini-3.5-flash-lite`). Zero classification errors observed; every failure seen was an HTTP 429 quota event, never a logic error.
+- **20/20 intents classified correctly** across all clean runs (15 on `gemini-3.5-flash`, 5 on `gemini-3.5-flash-lite`). Zero classification errors observed; every failure seen was an HTTP 429 quota event, never a logic error.
 - Out-of-scope discipline held in all three branches (thirst/water, fever pill, cross-branch snakebite question): honest fallback spoken, **zero improvised medical advice**.
 - Safety rails verified offline (24/24 checks): malformed/garbage model JSON → `unclear` → fail-safe line; `in_scope_question` with an invalid `qa_entry_id` → forced `out_of_scope` (the bot never guesses an answer); invalid tier values dropped.
 
@@ -101,9 +101,9 @@ Clean-run latency is **~4.4–5.7 s per turn**, dominated by intent classificati
 Round-trip test — generated TTS audio fed back through the STT path (`--verify-tts`, report: `test_runs/verify_tts.json`):
 
 - **fracture_crush** — byte-perfect verbatim round-trip.
-- **heavy_bleeding** — near-verbatim (ہیلپ بوٹ→ہیلپ لائن، قدم بہ قدم→قدم ب قدم; orthographic variance only, meaning fully intact).
-- **snakebite** — verbatim (minus punctuation) on the shared fail-safe line; branch-specific audio pending quota reset.
-- All round-trips `stt_usable=True`. 26/39 scripted lines exist as real Urdu audio in `tts_cache/` (listen to verify). Audio files persist per line for manual review.
+- **heavy_bleeding** — near-verbatim (ہیلپ بوٹ→ہیلپ پورٹ in the 2026-08-31 run, ہیلپ لائن previously; orthographic variance only, meaning fully intact).
+- **snakebite** — verbatim on the branch-specific initial-guidance line; the only difference is `،`→`۔` (punctuation, no word changes).
+- All round-trips `stt_usable=True`, all three on branch-specific audio (`note=None` for every branch). **39/39 scripted lines exist as real Urdu audio** in `tts_cache/` (38 unique cache files — one escalated-guidance line is text-identical across two branches and shares a file; listen to verify). Audio files persist per line for manual review.
 
 ## 6. Quota findings (read before demo day)
 
@@ -111,23 +111,25 @@ Measured against this API key on 2026-08-30 (free tier):
 
 - `gemini-3.5-flash`: **20 requests/day**, shared by Module 1 triage (vision+STT+classifier) AND Module 2 STT+intent. Exhausted during testing.
 - Gemini TTS models: **10 requests/day per model** (confirmed via `GenerateRequestsPerDayPerProjectPerModel-FreeTier, quotaValue: 10`). `gemini-2.5-flash-preview-tts` and `gemini-3.1-flash-tts-preview` both exhausted; `gemini-2.5-pro-preview-tts` also capped.
-- Retired (404) on this key: `gemini-2.5-flash`, `2.5-flash-lite`, `2.0-flash(-lite)`, `2.5-pro`. **`gemini-3.5-flash-lite` and `gemini-3.1-flash-lite` are alive** with separate budgets — overridable via `GEMINI_CLASSIFIER_MODEL` / `GEMINI_STT_MODEL` (the snakebite 5/5 run used the lite classifier).
+- Retired (404) on this key: `gemini-2.5-flash`, `2.5-flash-lite`, `2.0-flash(-lite)`, `2.5-pro`. **`gemini-3.5-flash-lite` and `gemini-3.1-flash-lite` are alive** with separate budgets — overridable via `GEMINI_CLASSIFIER_MODEL` / `GEMINI_STT_MODEL` (the 2026-08-30 snakebite 5/5 run used the lite classifier; the clean 2026-08-31 rerun used the default `gemini-3.5-flash`).
+- **Re-measured 2026-08-31 (post-reset):** `gemini-3.1-flash-tts-preview` rendered all 13 remaining lines in a single run; only the 13th render 429'd, then succeeded after the built-in backoff (~105 s total). Treat the 10/day per-model figure as a conservative floor — short bursts past it can clear with brief backoff. `gemini-3.5-flash` absorbed 8 calls this session (5 intent + 3 STT) with zero 429s.
 
 **Demo-day recommendations:**
 1. Run `python backend\help_bot_runner.py --prewarm-tts` before the demo → conversations then consume **zero TTS quota** (100% cache hits).
 2. Budget ~6–8 STT/intent calls per conversation against the 20/day cap, or move the key to a paid tier.
 3. Keep `TRIAGE_QUOTA_RETRIES=3` (default) so transient 429s ride out; the fail-safe line covers the rest.
 
-## 7. Pending items (auto-completes at quota reset)
+## 7. Evidence completion record (2026-08-31, post-quota-reset) — COMPLETE
 
-Gemini TTS daily quota resets at midnight Pacific (**12:00 PKT, 2026-08-31**). A scheduled task in this conversation fires at 12:10 PKT to:
+All formerly pending items were completed on 2026-08-31 after the Gemini daily quota reset. **No evidence items remain.**
 
-1. `--prewarm-tts` — render the remaining 13 lines (fracture escalated-guidance #3 + 12 snakebite branch lines). If a model caps at 10, finish with `GEMINI_TTS_MODEL=gemini-2.5-flash-preview-tts`.
-2. Rerun the snakebite replay for the clean full-audio record (expect 5/5, 0 fail-safe substitutions).
-3. Rerun `--verify-tts` for the snakebite branch-specific round-trip.
-4. Update this report's evidence table.
-
-Manual equivalent (same three commands) if run by hand. Everything is cached/resumable; no work is redone.
+1. **TTS prewarm:** `--prewarm-tts` finished `13 rendered, 26 already cached` → **39/39 scripted lines rendered** (38 unique cache files; one escalated-guidance line is text-identical across two branches and shares a file). The fallback `GEMINI_TTS_MODEL=gemini-2.5-flash-preview-tts` was not needed: the default `gemini-3.1-flash-tts-preview` rendered all 13, with a single transient 429 on the final line clearing after built-in backoff (see §6).
+2. **Snakebite clean full-audio run:** `mockdata/helpbot/test_runs/INC-SIM-SNAKEBITE_replay_1788195379.json` — **5/5 expectations matched, 0 fail-safe substitutions, 10/10 bot lines real TTS (all cache hits)**, `branch_matched=True`, escalation `breathing_difficulty` → critical with ambulance requested, 9 transitions logged. Latency (utterance end → playback start): **min 4647 ms, avg 5263 ms, max 5882 ms** — in family with the other clean branches (~4.4–5.7 s/turn).
+3. **Snakebite round-trip transcript** (`--verify-tts`; branch-specific audio `tts_cache/c55a311d6b77032d.wav`; STT `gemini-3.5-flash`; `stt_usable=True`):
+   - Source: میں لائف لائن ہیلپ بوٹ ہوں۔ یہ سانپ کے کاٹنے کا کیس ہے۔ مریض کو پرسکون رکھیں اور بالکل ہلنے نہ دیں، حرکت سے زہر تیزی سے پھیلتا ہے۔
+   - STT: میں لائف لائن ہیلپ بوٹ ہوں۔ یہ سانپ کے کاٹنے کا کیس ہے۔ مریض کو پرسکون رکھیں اور بالکل ہلنے نہ دیں۔ حرکت سے زہر تیزی سے پھیلتا ہے۔
+   - Verbatim except `،`→`۔` (punctuation only; no word changes).
+4. **Evidence complete:** all 3 branches have clean 5/5 runs with full real-TTS audio and clean branch-specific round-trips. The earlier degraded records (`INC-SIM-SNAKEBITE_replay_1788080732.json`, 1/10 real audio) are superseded but retained in `test_runs/` for audit.
 
 ## 8. How to run
 

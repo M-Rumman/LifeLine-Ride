@@ -3,7 +3,7 @@
     "source_line": "میں لائف لائن ہیلپ بوٹ ہوں۔ میں قدم بہ قدم آپ کی مدد کروں گا۔ سب سے پہلے گہرا سانس لیں اور پرسکون رہیں۔",
     "note": null,
     "wav": "D:\\LifeLine Ride\\mockdata\\helpbot\\tts_cache\\fd072e0dbf3bbee0.wav",
-    "roundtrip_transcript": "میں لائف لائن ہیلپ لائن ہوں۔ میں قدم ب قدم آپ کی مدد کروں گا۔ سب سے پہلے گہرا سانس لیں اور پرسکون رہیں۔",
+    "roundtrip_transcript": "میں لائف لائن ہیلپ پورٹ ہوں۔ میں قدم بہ قدم آپ کی مدد کروں گا۔ سب سے پہلے گہرا سانس لیں اور پرسکون رہیں۔",
     "stt_usable": true
   },
   "fracture_crush": {
@@ -14,10 +14,10 @@
     "stt_usable": true
   },
   "snakebite": {
-    "source_line": "معذرت، میں ٹھیک سے سن نہیں پایا۔ پریشان نہ ہوں۔ جو ہدایت دی گئی ہے اسی پر عمل جاری رکھیں، مدد راستے میں ہے۔ میں دوبارہ سننے کی کوشش کر رہا ہوں۔",
-    "note": "branch-specific audio not yet rendered (TTS quota); round-trip done on the shared fail-safe line",
-    "wav": "D:\\LifeLine Ride\\mockdata\\helpbot\\tts_cache\\21a28b51689bbb4d.wav",
-    "roundtrip_transcript": "معذرت میں ٹھیک سے سن نہیں پایا پریشان نہ ہوں جو ہدایت دی گئی ہے اسی پر عمل جاری رکھیں مدد راستے میں ہے میں دوبارہ سننے کی کوشش کر رہا ہوں۔",
+    "source_line": "میں لائف لائن ہیلپ بوٹ ہوں۔ یہ سانپ کے کاٹنے کا کیس ہے۔ مریض کو پرسکون رکھیں اور بالکل ہلنے نہ دیں، حرکت سے زہر تیزی سے پھیلتا ہے۔",
+    "note": null,
+    "wav": "D:\\LifeLine Ride\\mockdata\\helpbot\\tts_cache\\c55a311d6b77032d.wav",
+    "roundtrip_transcript": "میں لائف لائن ہیلپ بوٹ ہوں۔ یہ سانپ کے کاٹنے کا کیس ہے۔ مریض کو پرسکون رکھیں اور بالکل ہلنے نہ دیں۔ حرکت سے زہر تیزی سے پھیلتا ہے۔",
     "stt_usable": true
   }
 }

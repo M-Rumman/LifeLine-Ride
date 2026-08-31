@@ -1,0 +1,1 @@
+Python backend that wires Module 1's triage/dispatch pipeline into Module 2's Urdu help-bot session by sharing Pydantic Incident models, seed responders/BHUs, and mock media across console entrypoints.

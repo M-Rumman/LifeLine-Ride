@@ -1,6 +1,6 @@
 schema_version: 1
 module_path: ""
-title: LifeLine Ride Hackathon Workspace
+title: Village Emergency Response System Demo Workspace
 scope:
     - PROJECT.md
     - DEMO_SCRIPT.md

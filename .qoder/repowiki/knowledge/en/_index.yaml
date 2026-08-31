@@ -3,11 +3,11 @@ schema_version: 1
 locale: en-US
 branch: main
 nodes_managed: true
-exported_at: "2026-08-30T10:12:52Z"
+exported_at: "2026-08-31T15:07:16Z"
 modules:
     "":
-        dir_name: LifeLine Ride Hackathon Workspace
-        title: LifeLine Ride Hackathon Workspace
+        dir_name: Village Emergency Response System Demo Workspace
+        title: Village Emergency Response System Demo Workspace
         scope:
             - PROJECT.md
             - DEMO_SCRIPT.md
@@ -22,8 +22,8 @@ modules:
         depends_on: []
         related_to: []
     backend:
-        dir_name: LifeLine Ride Backend Orchestration
-        title: LifeLine Ride Backend Orchestration
+        dir_name: Emergency Response Backend Orchestration
+        title: Emergency Response Backend Orchestration
         scope:
             - backend/
         source_files: []

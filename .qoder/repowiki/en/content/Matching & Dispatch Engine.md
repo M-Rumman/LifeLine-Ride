@@ -2,11 +2,22 @@
 
 <cite>
 **Referenced Files in This Document**
+- [dispatch_service.py](file://backend/services/dispatch_service.py)
+- [test_module3.py](file://backend/test_module3.py)
 - [slice_runner.py](file://backend/slice_runner.py)
 - [help_bot_runner.py](file://backend/help_bot_runner.py)
 - [village-emergency-response-system-spec.md](file://village-emergency-response-system-spec.md)
 - [PROJECT.md](file://PROJECT.md)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Added comprehensive coverage of the new sophisticated dispatch service with offline-first architecture
+- Enhanced documentation for thread-safe state management and concurrent operations
+- Updated tiered dispatch strategies with timeout handling and fallback mechanisms
+- Added detailed coverage of escalation system integration and re-dispatch capabilities
+- Expanded performance considerations for large-scale matching operations
+- Updated troubleshooting guide with new error scenarios and resolution strategies
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -20,446 +31,384 @@
 9. [Conclusion](#conclusion)
 
 ## Introduction
-This document explains the Matching & Dispatch Engine (Module 3) that selects responders and coordinates dispatch for emergencies using GPS-based location data, availability checks, and severity-driven tiered strategies. It covers:
-- Ranked proximity matching with availability filtering
+This document explains the enhanced Matching & Dispatch Engine (Module 3) that selects responders and coordinates dispatch for emergencies using GPS-based location data, availability checks, and severity-driven tiered strategies. The system features an offline-first architecture with sophisticated dispatch capabilities including timeout handling, fallback mechanisms, and comprehensive event logging. It covers:
+- Ranked proximity matching with availability filtering and fallback walker
 - Village-to-BHU association and responder registry integration
-- Tiered dispatch logic based on severity (minor/moderate/critical)
+- Tiered dispatch logic based on severity (minor/moderate/critical) with timeout handling
 - Coordination workflows involving multiple responders and BHUs
 - Escalation mechanisms when no responders are available or within timeout
-- Performance considerations for large-scale matching and geographic data optimization
-- Failover procedures to ensure continuity when resources are exhausted
+- Thread-safe state management for concurrent incident handling
+- Comprehensive event logging and analytics tracking
+- Integration with escalation systems and Module 2 help bot
 
 The engine integrates tightly with incident registration and triage (Module 1), the responder help bot (Module 2), and outcome tracking (Module 6).
 
 **Section sources**
+- [dispatch_service.py:1-37](file://backend/services/dispatch_service.py#L1-L37)
+- [test_module3.py:1-11](file://backend/test_module3.py#L1-L11)
 - [village-emergency-response-system-spec.md:66-82](file://village-emergency-response-system-spec.md#L66-L82)
 - [PROJECT.md:8-15](file://PROJECT.md#L8-L15)
 
 ## Project Structure
-At a high level, the Matching & Dispatch Engine is implemented as part of the backend slice runner and is invoked by the help bot runner during end-to-end flows. The key elements include:
-- Data models for incidents, responders, BHUs, and dispatch results
-- Seed registries for responders and BHUs with village associations
-- Matching function that filters responders by village and availability
-- Dispatch function that applies tiered notifications and ambulance requests
-- Logging to persist lifecycle events
+At a high level, the Matching & Dispatch Engine is implemented as a sophisticated service module with clear separation between decision logic and delivery mechanisms. The key elements include:
+- Core dispatch service with offline-first architecture
+- Thread-safe state management for concurrent operations
+- Comprehensive event logging system
+- Integration points with Module 1 (incident registration) and Module 2 (help bot)
+- Test suite covering all specified behaviors
+- Backward compatibility with existing slice runner functions
 
 ```mermaid
 graph TB
-A["Incident Registration<br/>(Module 1)"] --> B["Matching & Dispatch Engine<br/>(Module 3)"]
+A["Incident Registration<br/>(Module 1)"] --> B["Dispatch Service<br/>(Module 3)"]
 B --> C["Responder Registry<br/>(Module 5)"]
 B --> D["BHU Association<br/>(Module 5)"]
 B --> E["Escalation Logic<br/>(Module 8)"]
 B --> F["Outcome Tracking<br/>(Module 6)"]
 G["Help Bot Runner<br/>(Module 2)"] --> B
+H["Test Suite<br/>(Module 3)"] --> B
 ```
 
 **Diagram sources**
-- [slice_runner.py:170-213](file://backend/slice_runner.py#L170-L213)
-- [slice_runner.py:219-275](file://backend/slice_runner.py#L219-L275)
-- [slice_runner.py:612-662](file://backend/slice_runner.py#L612-L662)
+- [dispatch_service.py:146-237](file://backend/services/dispatch_service.py#L146-L237)
+- [dispatch_service.py:644-658](file://backend/services/dispatch_service.py#L644-L658)
+- [test_module3.py:672-681](file://backend/test_module3.py#L672-L681)
 - [help_bot_runner.py:64-99](file://backend/help_bot_runner.py#L64-L99)
 
 **Section sources**
-- [slice_runner.py:170-213](file://backend/slice_runner.py#L170-L213)
-- [slice_runner.py:219-275](file://backend/slice_runner.py#L219-L275)
+- [dispatch_service.py:146-237](file://backend/services/dispatch_service.py#L146-L237)
+- [dispatch_service.py:644-658](file://backend/services/dispatch_service.py#L644-L658)
+- [test_module3.py:672-681](file://backend/test_module3.py#L672-L681)
 - [help_bot_runner.py:64-99](file://backend/help_bot_runner.py#L64-L99)
 
 ## Core Components
-- Incident model: carries GPS location, severity tier, injury flags, and timestamps for dispatch and escalation
-- Responder model: includes village assignment, linked BHU, and current availability status
-- BHU model: includes union council and list of linked villages
-- Dispatch result: captures assigned responder, BHU notification, ambulance request, and final status
-- Matching function: filters responders by village and availability; returns first available responder and linked BHU
-- Dispatch function: sets responder busy, notifies BHU per tier, requests ambulance for critical cases, and logs outcomes
+- **DispatchDecision**: Immutable data structure containing ranked responders, notification flags, and status
+- **Thread-safe State Management**: In-memory dispatch state with locking for concurrent access
+- **Offline-First Architecture**: Pure local decision logic with zero network dependencies
+- **Event Logging System**: Comprehensive dispatch event tracking with timestamped logs
+- **Timeout Handling**: Configurable acknowledgment timeouts with automatic fallback
+- **Fallback Walker**: Sequential traversal of ranked responders on timeout or decline
+- **Escalation Integration**: Seamless integration with Module 2's escalation system
 
 Key responsibilities:
-- Ensure only available responders are considered
-- Apply severity-tiered dispatch rules
-- Maintain state consistency by marking responders busy upon assignment
+- Ensure only available responders are considered with ranked fallback
+- Apply severity-tiered dispatch rules with timeout handling
+- Maintain thread-safe state consistency during concurrent operations
 - Log all dispatch actions for accountability and analytics
+- Provide offline-first operation capability for rural deployment
 
 **Section sources**
-- [slice_runner.py:170-213](file://backend/slice_runner.py#L170-L213)
-- [slice_runner.py:612-662](file://backend/slice_runner.py#L612-L662)
+- [dispatch_service.py:76-89](file://backend/services/dispatch_service.py#L76-L89)
+- [dispatch_service.py:96-99](file://backend/services/dispatch_service.py#L96-L99)
+- [dispatch_service.py:146-237](file://backend/services/dispatch_service.py#L146-L237)
 
 ## Architecture Overview
-The Matching & Dispatch Engine orchestrates three primary operations:
-1. Match: Identify nearest available responder(s) based on village and availability
-2. Dispatch: Apply tiered notifications and resource requests
-3. Log: Persist incident lifecycle events for tracking and analytics
+The Matching & Dispatch Engine orchestrates sophisticated dispatch operations with offline-first design:
+1. **Decide**: Pure local decision logic with ranked responder selection
+2. **Notify**: Swappable delivery layer with structured logging
+3. **Monitor**: Timeout handling with automatic fallback mechanisms
+4. **Escalate**: Integration with Module 2 for dynamic tier upgrades
+5. **Log**: Comprehensive event tracking for analytics and debugging
 
 ```mermaid
 sequenceDiagram
 participant Client as "Client"
 participant Helper as "Help Bot Runner"
-participant Engine as "Matching & Dispatch Engine"
+participant Service as "Dispatch Service"
+participant State as "Thread-Safe State"
 participant Registry as "Responder Registry"
-participant BHU as "BHU Association"
-participant Logger as "Outcome Tracker"
+participant Logger as "Event Logger"
 Client->>Helper : Create incident (photo + voice + GPS)
-Helper->>Engine : matchResponderAndBHU(incident)
-Engine->>Registry : Filter responders by village + availability
-Registry-->>Engine : Available responder(s)
-Engine->>BHU : Lookup linked BHU by village
-BHU-->>Engine : Linked BHU
-Engine->>Engine : Apply tiered dispatch rules
-Engine->>Logger : logIncident(incident, dispatch_result)
-Logger-->>Client : Dispatch status and next steps
+Helper->>Service : dispatchIncident(incident)
+Service->>Service : decideDispatch() - pure local logic
+Service->>Registry : Filter responders by village + availability
+Registry-->>Service : Available responders (ranked)
+Service->>State : Store dispatch state with lock
+Service->>Service : sendNotification() - delivery layer
+Service->>Logger : log events with timestamps
+alt Timeout occurs
+Service->>State : Trigger fallback walker
+Service->>Registry : Next available responder
+else Explicit decline
+Service->>State : Immediate fallback trigger
+end
+Service->>Logger : Final dispatch status
+Logger-->>Client : Dispatch result with full trace
 ```
 
 **Diagram sources**
-- [help_bot_runner.py:64-99](file://backend/help_bot_runner.py#L64-L99)
-- [slice_runner.py:612-662](file://backend/slice_runner.py#L612-L662)
+- [dispatch_service.py:146-237](file://backend/services/dispatch_service.py#L146-L237)
+- [dispatch_service.py:244-344](file://backend/services/dispatch_service.py#L244-L344)
+- [dispatch_service.py:350-486](file://backend/services/dispatch_service.py#L350-L486)
+- [test_module3.py:147-212](file://backend/test_module3.py#L147-L212)
 
 ## Detailed Component Analysis
 
-### Ranked Proximity Matching Algorithm
-- Current implementation filters responders by village and availability status
-- Returns the first available responder in the village group
-- Specification requires ranked proximity matching across the entire network, falling back to next-nearest if unavailable
-- Future enhancement should compute distances from incident GPS to responder locations and sort candidates by distance
+### Offline-First Decision Logic
+The core decision-making process operates entirely offline with zero network dependencies:
+- Filters responders by village membership and availability status
+- Maintains deterministic ranking based on original seed data order
+- Applies tier-based notification rules without external calls
+- Returns comprehensive decision objects with reasoning traces
 
 ```mermaid
 flowchart TD
-Start(["Match Entry"]) --> GetVillage["Get village_id from incident GPS"]
-GetVillage --> FilterByVillage["Filter responders by village"]
-FilterByVillage --> CheckAvailability{"Any available?"}
-CheckAvailability --> |Yes| SelectFirst["Select first available responder"]
-CheckAvailability --> |No| NextNearest["Expand search to next-nearest available"]
-NextNearest --> HasCandidate{"Candidate found?"}
-HasCandidate --> |Yes| Assign["Assign responder"]
-HasCandidate --> |No| Escalate["Escalate to BHU-only or coverage gap"]
-Assign --> End(["Match Exit"])
-Escalate --> End
+Start(["decideDispatch Entry"]) --> GetVillage["Get village_id from incident GPS"]
+GetVillage --> FilterResponders["Filter responders by village + availability"]
+FilterResponders --> CheckAvailable{"Any available?"}
+CheckAvailable --> |No| EscalateBHU["Escalate to BHU-only"]
+CheckAvailable --> |Yes| SelectPrimary["Select primary responder (first in ranked list)"]
+SelectPrimary --> ApplyTier["Apply tier-based notification rules"]
+ApplyTier --> ReturnDecision["Return DispatchDecision object"]
+EscalateBHU --> ReturnDecision
+ReturnDecision --> End(["Decision Exit"])
 ```
 
 **Diagram sources**
-- [slice_runner.py:612-623](file://backend/slice_runner.py#L612-L623)
-- [village-emergency-response-system-spec.md:70-79](file://village-emergency-response-system-spec.md#L70-L79)
+- [dispatch_service.py:146-237](file://backend/services/dispatch_service.py#L146-L237)
 
 **Section sources**
-- [slice_runner.py:612-623](file://backend/slice_runner.py#L612-L623)
-- [village-emergency-response-system-spec.md:70-79](file://village-emergency-response-system-spec.md#L70-L79)
+- [dispatch_service.py:146-237](file://backend/services/dispatch_service.py#L146-L237)
 
-### Availability Checking Logic
-- Responders have an availability status: available, busy, offline
-- Only responders marked available are eligible for assignment
-- Upon assignment, the responder’s status is updated to busy to prevent double-assignment
-- This ensures concurrency safety during concurrent incident handling
+### Thread-Safe State Management
+Comprehensive state management ensures concurrent safety across multiple threads:
+- Lock-protected dispatch state dictionary keyed by incident ID
+- Atomic timer management for acknowledgment timeouts
+- Synchronized fallback walker operations
+- Thread-safe incident state updates
 
 ```mermaid
 stateDiagram-v2
-[*] --> Available
-Available --> Busy : "Assigned to incident"
-Busy --> Available : "Incident completed"
-Available --> Offline : "Unavailable"
-Offline --> Available : "Back online"
+[*] --> Active
+Active --> Acknowledged : "responder_acknowledged"
+Active --> Declined : "responder_declined"
+Active --> Timeout : "ack_timeout"
+Acknowledged --> [*] : "incident_complete"
+Declined --> Fallback : "immediate fallback"
+Timeout --> Fallback : "automatic fallback"
+Fallback --> Active : "next responder"
+Fallback --> [*] : "all_responders_exhausted"
 ```
 
 **Diagram sources**
-- [slice_runner.py:191-198](file://backend/slice_runner.py#L191-L198)
-- [slice_runner.py:631-635](file://backend/slice_runner.py#L631-L635)
+- [dispatch_service.py:96-99](file://backend/services/dispatch_service.py#L96-L99)
+- [dispatch_service.py:350-396](file://backend/services/dispatch_service.py#L350-L396)
+- [dispatch_service.py:402-486](file://backend/services/dispatch_service.py#L402-L486)
 
 **Section sources**
-- [slice_runner.py:191-198](file://backend/slice_runner.py#L191-L198)
-- [slice_runner.py:631-635](file://backend/slice_runner.py#L631-L635)
+- [dispatch_service.py:96-99](file://backend/services/dispatch_service.py#L96-L99)
+- [dispatch_service.py:350-396](file://backend/services/dispatch_service.py#L350-L396)
+- [dispatch_service.py:402-486](file://backend/services/dispatch_service.py#L402-L486)
 
-### Tiered Dispatch Strategies Based on Severity Levels
-- Minor (Tier 1): Notify responder only
-- Moderate (Tier 2): Notify responder and place linked BHU on standby
-- Critical (Tier 3): Notify responder, notify BHU, and request ambulance simultaneously
-
-```mermaid
-flowchart TD
-Start(["Dispatch Entry"]) --> GetTier["Get severity_tier"]
-GetTier --> IsMinor{"Tier == minor?"}
-IsMinor --> |Yes| NotifyResponder["Notify responder"]
-IsMinor --> |No| IsModerate{"Tier == moderate?"}
-IsModerate --> |Yes| NotifyResponderAndBHU["Notify responder + BHU standby"]
-IsModerate --> |No| IsCritical{"Tier == critical?"}
-IsCritical --> |Yes| FullDispatch["Notify responder + BHU + Ambulance"]
-IsCritical --> |No| Default["Default to moderate behavior"]
-NotifyResponder --> End(["Dispatch Exit"])
-NotifyResponderAndBHU --> End
-FullDispatch --> End
-Default --> End
-```
-
-**Diagram sources**
-- [slice_runner.py:626-662](file://backend/slice_runner.py#L626-L662)
-- [village-emergency-response-system-spec.md:74-78](file://village-emergency-response-system-spec.md#L74-L78)
-
-**Section sources**
-- [slice_runner.py:626-662](file://backend/slice_runner.py#L626-L662)
-- [village-emergency-response-system-spec.md:74-78](file://village-emergency-response-system-spec.md#L74-L78)
-
-### Village-BHU Association System
-- Each village is pre-associated with one nearby BHU via linked_village_ids
-- Matching function retrieves the linked BHU for the incident’s village
-- This fixed mapping ensures consistent local relationships and avoids independent BHU searches
-
-```mermaid
-erDiagram
-VILLAGE {
-string village_id PK
-}
-BHU {
-string bhu_id PK
-string name
-string union_council
-}
-VILLAGE ||--o{ BHU : "linked_village_ids[]"
-```
-
-**Diagram sources**
-- [slice_runner.py:219-232](file://backend/slice_runner.py#L219-L232)
-- [slice_runner.py:615-616](file://backend/slice_runner.py#L615-L616)
-
-**Section sources**
-- [slice_runner.py:219-232](file://backend/slice_runner.py#L219-L232)
-- [slice_runner.py:615-616](file://backend/slice_runner.py#L615-L616)
-
-### Responder Registry Integration
-- Responder records include village assignment, linked BHU, and availability status
-- Matching function filters responders by village and availability
-- Assignment updates responder status to busy to prevent conflicts
+### Comprehensive Event Logging System
+Every dispatch action generates timestamped events for complete audit trails:
+- Responder assignment and acknowledgment events
+- BHU notification events with urgency levels
+- Ambulance request events for critical cases
+- Fallback and escalation events with detailed reasons
+- Integration with INCIDENT_STORE for persistent logging
 
 ```mermaid
 classDiagram
-class Responder {
+class DispatchEvent {
++string event
++string timestamp
++string incident_id
 +string responder_id
-+string name
-+string village
-+string linked_bhu_id
-+AvailabilityStatus current_availability_status
-+int points_total
++string bhu_id
++string reason
++string tier
++int fallback_count
 }
 class Incident {
 +string incident_id
-+GPSLocation gps_location
-+SeverityTier severity_tier
-+string[] injury_type_flags
-+string responder_assigned_id
-+string responder_dispatch_timestamp
++DispatchEvent[] dispatch_events
++int dispatch_fallback_count
++bool bhu_notified
++bool ambulance_requested
 }
-class BHU {
-+string bhu_id
-+string name
-+string union_council
-+string[] linked_village_ids
-}
-Incident --> Responder : "assigns"
-Responder --> BHU : "linked_bhu_id"
+Incident --> DispatchEvent : "contains"
 ```
 
 **Diagram sources**
-- [slice_runner.py:170-213](file://backend/slice_runner.py#L170-L213)
-- [slice_runner.py:234-275](file://backend/slice_runner.py#L234-L275)
+- [dispatch_service.py:113-125](file://backend/services/dispatch_service.py#L113-L125)
+- [dispatch_service.py:269-330](file://backend/services/dispatch_service.py#L269-L330)
+- [dispatch_service.py:426-483](file://backend/services/dispatch_service.py#L426-L483)
 
 **Section sources**
-- [slice_runner.py:170-213](file://backend/slice_runner.py#L170-L213)
-- [slice_runner.py:234-275](file://backend/slice_runner.py#L234-L275)
+- [dispatch_service.py:113-125](file://backend/services/dispatch_service.py#L113-L125)
+- [dispatch_service.py:269-330](file://backend/services/dispatch_service.py#L269-L330)
+- [dispatch_service.py:426-483](file://backend/services/dispatch_service.py#L426-L483)
 
-### Coordination Workflows for Multiple Responders
-- When multiple responders are available in a village, the system selects the first available one
-- If the selected responder becomes busy, subsequent incidents may select another available responder
-- Escalation occurs if no responders are available within the village or network
-
-```mermaid
-sequenceDiagram
-participant I as "Incident"
-participant M as "Matching Engine"
-participant R1 as "Responder A"
-participant R2 as "Responder B"
-participant B as "BHU"
-I->>M : Request match
-M->>R1 : Check availability
-R1-->>M : Busy
-M->>R2 : Check availability
-R2-->>M : Available
-M->>I : Assign R2
-I->>B : Notify per tier
-```
-
-**Diagram sources**
-- [slice_runner.py:617-623](file://backend/slice_runner.py#L617-L623)
-- [slice_runner.py:637-651](file://backend/slice_runner.py#L637-L651)
-
-**Section sources**
-- [slice_runner.py:617-623](file://backend/slice_runner.py#L617-L623)
-- [slice_runner.py:637-651](file://backend/slice_runner.py#L637-L651)
-
-### Distance Calculations and Filtering Criteria
-- Current implementation uses village-based filtering rather than GPS distance calculations
-- Specification requires ranked proximity matching based on GPS coordinates
-- Future enhancements should implement Haversine formula or spatial database queries for accurate distance computation
-- Filtering criteria include:
-  - Village membership
-  - Availability status (available vs busy/offline)
-  - Proximity ranking (future)
+### Timeout Handling and Fallback Mechanisms
+Sophisticated timeout management with automatic fallback walking:
+- Configurable acknowledgment timeouts (default 120 seconds)
+- Automatic fallback to next ranked responder on timeout
+- Immediate fallback on explicit responder decline
+- Exhaustion handling with BHU-only escalation
 
 ```mermaid
 flowchart TD
-Start(["Distance Calculation"]) --> GetCoords["Get incident GPS coords"]
-GetCoords --> GetResponders["Fetch responder locations"]
-GetResponders --> ComputeDist["Compute distances"]
-ComputeDist --> SortDist["Sort by distance"]
-SortDist --> FilterAvail["Filter by availability"]
-FilterAvail --> SelectClosest["Select closest available"]
-SelectClosest --> End(["Return matched responder"])
+Start(["Responser Dispatched"]) --> StartTimer["Start ack timeout timer"]
+StartTimer --> WaitAck{"Await acknowledgment"}
+WaitAck --> |Acknowledged| Complete["Complete successfully"]
+WaitAck --> |Timeout| Fallback["Trigger fallback walker"]
+WaitAck --> |Declined| ImmediateFallback["Immediate fallback"]
+Fallback --> CheckNext{"More responders?"}
+ImmediateFallback --> CheckNext
+CheckNext --> |Yes| NextResponder["Dispatch next responder"]
+CheckNext --> |No| EscalateBHU["Escalate to BHU-only"]
+NextResponder --> StartTimer
+EscalateBHU --> Complete
 ```
 
 **Diagram sources**
-- [village-emergency-response-system-spec.md:70-73](file://village-emergency-response-system-spec.md#L70-L73)
-- [slice_runner.py:612-623](file://backend/slice_runner.py#L612-L623)
+- [dispatch_service.py:350-376](file://backend/services/dispatch_service.py#L350-L376)
+- [dispatch_service.py:402-486](file://backend/services/dispatch_service.py#L402-L486)
 
 **Section sources**
-- [village-emergency-response-system-spec.md:70-73](file://village-emergency-response-system-spec.md#L70-L73)
-- [slice_runner.py:612-623](file://backend/slice_runner.py#L612-L623)
+- [dispatch_service.py:350-376](file://backend/services/dispatch_service.py#L350-L376)
+- [dispatch_service.py:402-486](file://backend/services/dispatch_service.py#L402-L486)
 
-### Dispatch Result Generation
-- Dispatch function creates a structured result including:
-  - Incident ID
-  - Assigned responder (if any)
-  - BHU notification status
-  - Ambulance request flag
-  - Final status (dispatched, escalated_bhu_only, no_responders_available)
-- Results are logged for tracking and analytics
-
-```mermaid
-classDiagram
-class DispatchResult {
-+string incident_id
-+Responder responder
-+BHU bhu
-+bool ambulance_requested
-+string status
-}
-class Incident {
-+string incident_id
-+string responder_assigned_id
-+string responder_dispatch_timestamp
-+bool bhu_notified
-+string bhu_notify_timestamp
-+bool ambulance_requested
-}
-DispatchResult --> Incident : "references"
-```
-
-**Diagram sources**
-- [slice_runner.py:207-213](file://backend/slice_runner.py#L207-L213)
-- [slice_runner.py:656-662](file://backend/slice_runner.py#L656-L662)
-
-**Section sources**
-- [slice_runner.py:207-213](file://backend/slice_runner.py#L207-L213)
-- [slice_runner.py:656-662](file://backend/slice_runner.py#L656-L662)
-
-### Relationships with Incident Tracking and Escalation Mechanisms
-- Incidents are logged with full lifecycle information including dispatch timestamps and outcomes
-- Escalation occurs when:
-  - No responders respond within timeout window
-  - All responders in the network are unavailable
-  - Mid-incident escalation from help bot indicates worsening condition
-- Escalation triggers re-dispatch to next available responder or direct BHU notification
+### Escalation System Integration
+Seamless integration with Module 2's escalation system for dynamic tier upgrades:
+- Re-dispatch triggers based on upgraded severity tiers
+- Delta-based notification sending to avoid duplicates
+- Support for BHU urgency upgrades (standby → urgent)
+- Ambulance request escalation for critical tier upgrades
 
 ```mermaid
 sequenceDiagram
-participant I as "Incident"
-participant E as "Escalation Engine"
-participant M as "Matching Engine"
-participant B as "BHU"
-I->>E : Timeout reached
-E->>M : Find next available responder
-alt Responder available
-M-->>E : New responder
-E->>I : Re-assign responder
-else No responder available
-E->>B : Direct BHU notification
-E->>I : Mark as coverage gap
+participant Module2 as "Module 2 Help Bot"
+participant Module3 as "Module 3 Dispatch"
+participant State as "Dispatch State"
+Module2->>Module3 : handleEscalation(incident_id, snapshot)
+Module3->>State : Read current state
+Module3->>Module3 : Diff old vs new tier
+alt New tier needs BHU
+Module3->>Module3 : sendNotification(BHU upgrade)
+else New tier needs ambulance
+Module3->>Module3 : Request ambulance
 end
+Module3->>State : Update state with new tier
+Module3->>Module3 : Log escalation events
 ```
 
 **Diagram sources**
-- [village-emergency-response-system-spec.md:153-162](file://village-emergency-response-system-spec.md#L153-L162)
-- [slice_runner.py:646-648](file://backend/slice_runner.py#L646-L648)
+- [dispatch_service.py:526-638](file://backend/services/dispatch_service.py#L526-L638)
+- [test_module3.py:498-577](file://backend/test_module3.py#L498-L577)
 
 **Section sources**
-- [village-emergency-response-system-spec.md:153-162](file://village-emergency-response-system-spec.md#L153-L162)
-- [slice_runner.py:646-648](file://backend/slice_runner.py#L646-L648)
+- [dispatch_service.py:526-638](file://backend/services/dispatch_service.py#L526-L638)
+- [test_module3.py:498-577](file://backend/test_module3.py#L498-L577)
+
+### Comprehensive Test Coverage
+Eight-scenario test suite covering all specified behaviors:
+- Ranked fallback matching with busy responders
+- Village exhaustion leading to BHU-only escalation
+- Critical tier simultaneous dispatch (responder + BHU + ambulance)
+- Minor tier with no available responders
+- Timeout fallback mechanisms
+- Explicit responder decline handling
+- Escalation re-dispatch functionality
+- Offline verification ensuring zero network dependencies
+
+**Section sources**
+- [test_module3.py:147-212](file://backend/test_module3.py#L147-L212)
+- [test_module3.py:218-265](file://backend/test_module3.py#L218-L265)
+- [test_module3.py:272-327](file://backend/test_module3.py#L272-L327)
+- [test_module3.py:333-374](file://backend/test_module3.py#L333-L374)
+- [test_module3.py:380-424](file://backend/test_module3.py#L380-L424)
+- [test_module3.py:430-492](file://backend/test_module3.py#L430-L492)
+- [test_module3.py:498-577](file://backend/test_module3.py#L498-L577)
+- [test_module3.py:583-652](file://backend/test_module3.py#L583-L652)
 
 ## Dependency Analysis
-The Matching & Dispatch Engine depends on several components:
-- Incident registration module for creating incidents with GPS and severity data
-- Responder registry for availability and location data
-- BHU association system for facility notifications
-- Help bot runner for end-to-end workflow coordination
-- Outcome tracking for logging and analytics
+The Matching & Dispatch Engine has well-defined dependencies:
+- **slice_runner.py**: Provides data contracts, seed data, and incident models
+- **Module 2 (help_bot_service)**: Integration point for escalation handling
+- **Threading library**: For concurrent timer management and state protection
+- **Standard libraries**: datetime, os, threading for core functionality
 
 ```mermaid
 graph TB
-A["Incident Registration"] --> B["Matching & Dispatch Engine"]
-C["Responder Registry"] --> B
-D["BHU Association"] --> B
-E["Help Bot Runner"] --> B
-B --> F["Outcome Tracking"]
-B --> G["Escalation Logic"]
+A["Module 1 (slice_runner)"] --> B["Module 3 (Dispatch Service)"]
+C["Module 2 (Help Bot)"] --> B
+D["Threading Library"] --> B
+E["Standard Libraries"] --> B
+B --> F["Event Logging System"]
+B --> G["State Management"]
 ```
 
 **Diagram sources**
-- [help_bot_runner.py:64-99](file://backend/help_bot_runner.py#L64-L99)
-- [slice_runner.py:612-662](file://backend/slice_runner.py#L612-L662)
+- [dispatch_service.py:58-59](file://backend/services/dispatch_service.py#L58-L59)
+- [dispatch_service.py:40-44](file://backend/services/dispatch_service.py#L40-L44)
 
 **Section sources**
-- [help_bot_runner.py:64-99](file://backend/help_bot_runner.py#L64-L99)
-- [slice_runner.py:612-662](file://backend/slice_runner.py#L612-L662)
+- [dispatch_service.py:58-59](file://backend/services/dispatch_service.py#L58-L59)
+- [dispatch_service.py:40-44](file://backend/services/dispatch_service.py#L40-L44)
 
 ## Performance Considerations
-For large-scale matching operations, consider:
-- Geographic data optimization: Implement spatial indexing for faster proximity queries
-- Caching: Cache responder availability and location data to reduce database load
-- Batch processing: Process multiple incidents concurrently where possible
-- Database optimization: Use spatial databases with GIS functions for distance calculations
-- Memory management: Limit the number of responders loaded into memory at once
-- Connection pooling: Optimize database connections for high-throughput scenarios
+For large-scale matching operations, the sophisticated dispatch service provides:
+- **Offline-first architecture**: Zero network dependencies ensure consistent performance
+- **Thread-safe operations**: Concurrent incident handling without race conditions
+- **Efficient state management**: In-memory dispatch state with lock-based synchronization
+- **Configurable timeouts**: Tunable acknowledgment periods for different deployment scenarios
+- **Memory efficiency**: Lightweight data structures and lazy loading patterns
 
-Current limitations:
-- Village-based filtering instead of GPS-based proximity matching
-- In-memory data structures that may not scale to thousands of responders
-- Sequential processing without parallelization
+Current optimizations:
+- Deterministic ranking preserves original seed data order for predictable behavior
+- Lock-protected state prevents concurrent modification issues
+- Daemon timers don't block process exit during testing
+- Minimal object creation reduces memory overhead
 
-Recommendations:
-- Implement Haversine formula or PostGIS for accurate distance calculations
-- Add database indexes on village_id and availability_status
-- Consider Redis caching for frequently accessed responder data
-- Implement circuit breakers for external service dependencies
+Recommendations for production scaling:
+- Implement connection pooling for external service integrations
+- Add circuit breakers for dependency failures
+- Consider distributed state management for multi-instance deployments
+- Monitor memory usage for long-running processes
+- Implement graceful degradation for resource constraints
 
-[No sources needed since this section provides general guidance]
+[No sources needed since this section provides general guidance based on observed implementation patterns]
 
 ## Troubleshooting Guide
-Common issues and their resolutions:
-- No responders available: Verify responder availability status and village assignments
-- Double-assignment prevention: Ensure responders are marked busy during active incidents
-- BHU notification failures: Check linked BHU mappings and contact information
-- Escalation loops: Monitor for repeated escalations indicating coverage gaps
-- Performance bottlenecks: Profile matching algorithms and optimize database queries
+Common issues and their resolutions in the sophisticated dispatch system:
+- **No responders available**: Verify responder availability status and village assignments; check for BHU-only escalation
+- **Double-assignment prevention**: Ensure responders are marked busy during active incidents; verify thread-safe state updates
+- **BH U notification failures**: Check linked BHU mappings and contact information; verify escalation paths
+- **Timeout issues**: Adjust DISPATCH_ACK_TIMEOUT_S environment variable; monitor fallback walker progress
+- **Concurrent access problems**: Verify thread-safe state management; check for proper lock usage
+- **Event logging gaps**: Ensure dispatch events are properly appended; verify INCIDENT_STORE synchronization
 
 Debugging steps:
-- Check incident logs for dispatch status and timestamps
-- Verify responder registry data integrity
-- Monitor escalation triggers and timeout configurations
-- Validate GPS coordinates and village associations
+- Check dispatch_events array for complete audit trail
+- Monitor _DISPATCH_STATE for active incident tracking
+- Verify thread-safe operations with proper lock acquisition
+- Test offline functionality by blocking network access
+- Validate escalation integration with Module 2
 
 **Section sources**
-- [slice_runner.py:646-648](file://backend/slice_runner.py#L646-L648)
-- [slice_runner.py:665-672](file://backend/slice_runner.py#L665-L672)
+- [dispatch_service.py:402-486](file://backend/services/dispatch_service.py#L402-L486)
+- [dispatch_service.py:526-638](file://backend/services/dispatch_service.py#L526-L638)
+- [test_module3.py:583-652](file://backend/test_module3.py#L583-L652)
 
 ## Conclusion
-The Matching & Dispatch Engine provides a foundation for GPS-based responder selection and coordinated dispatch in rural emergency response systems. While the current implementation focuses on village-based matching and availability checking, it establishes the core architecture for future enhancements including:
-- GPS-based proximity matching with distance calculations
-- Advanced availability algorithms considering workload and response times
-- Scalable infrastructure for large responder networks
-- Enhanced escalation mechanisms for coverage gaps
+The enhanced Matching & Dispatch Engine provides a robust foundation for GPS-based responder selection and coordinated dispatch in rural emergency response systems. The sophisticated dispatch service introduces significant improvements over the basic implementation:
 
-The engine successfully integrates with incident registration, responder help bot, and outcome tracking to provide a comprehensive emergency response workflow. Future development should focus on implementing the specification requirements for ranked proximity matching and optimizing performance for real-world deployment scenarios.
+**Key Enhancements:**
+- **Offline-first architecture** ensuring reliable operation in connectivity-constrained environments
+- **Thread-safe state management** supporting concurrent incident processing
+- **Comprehensive event logging** providing complete audit trails for accountability
+- **Sophisticated timeout handling** with automatic fallback mechanisms
+- **Seamless escalation integration** enabling dynamic tier upgrades
+- **Extensive test coverage** validating all specified behaviors
+
+**Architectural Benefits:**
+- Clear separation between decision logic and delivery mechanisms
+- Swappable notification layers for future extensibility
+- Deterministic ranking ensuring predictable behavior
+- Minimal external dependencies reducing failure points
+
+The engine successfully integrates with incident registration, responder help bot, and outcome tracking to provide a comprehensive emergency response workflow. Future development should focus on implementing advanced geographic proximity matching while maintaining the current offline-first principles and thread-safety guarantees.
 
 [No sources needed since this section summarizes without analyzing specific files]
