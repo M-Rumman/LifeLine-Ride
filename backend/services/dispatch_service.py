@@ -272,8 +272,21 @@ def sendNotification(
             "responder_name": r.name,
             "tier": tier,
         })
-        # Start ack timeout timer
+        # Start ack timeout timer BEFORE the DB write-through. The responder's
+        # timeout window must be measured from the dispatch decision; a slow
+        # PostgreSQL round-trip in front of it delayed arming the timer, which
+        # let it fire *after* the responder had already acknowledged and logged
+        # a spurious ack_timeout against them.
         _start_ack_timer(incident.incident_id, r.responder_id)
+        # Part B persistence fix: write-through to PostgreSQL so availability
+        # status survives process restarts. Narrow update — touches ONLY the
+        # status column, so Module 5's persisted status_flag (stored in the
+        # repurposed reliability_tier column) is never clobbered. Non-fatal.
+        try:
+            from models.responder_model import update_responder_availability
+            update_responder_availability(r.responder_id, "busy")
+        except Exception as _exc:
+            _warn(f"DB write-through for busy status failed (non-fatal): {_exc}")
 
     # --- BHU notification ---
     # Note: both "dispatched" (with BHU standby/urgent) and "escalated_bhu_only"
@@ -509,6 +522,13 @@ def handleResponderDecline(incident_id: str, responder_id: str) -> None:
         for r in slice_runner.SEED_RESPONDERS:
             if r.responder_id == responder_id:
                 r.current_availability_status = "available"
+                # Part B persistence fix: narrow write-through to PostgreSQL
+                # (status column only — preserves Module 5's status_flag).
+                try:
+                    from models.responder_model import update_responder_availability
+                    update_responder_availability(r.responder_id, "available")
+                except Exception as _exc:
+                    _warn(f"DB write-through for available status failed (non-fatal): {_exc}")
                 break
         print(f"  [DISPATCH LOG] {responder_id} declined incident {incident_id}. "
               f"Triggering immediate fallback.")

@@ -75,8 +75,28 @@ def _call_with_retry(fn, step_name: str):
     Free-tier quotas replenish over time, so a bounded wait-then-retry keeps
     the pipeline usable during demos. Any final failure raises and is handled
     by the step wrapper's fail-safe.
+
+    Backoff is env-driven so replay/test runs can fail fast instead of
+    stalling the terminal waiting on quota replenishment:
+
+      TRIAGE_RETRY_BACKOFF_S   base backoff (seconds) per attempt. Default 15.
+                               Capped at 60 so a misconfigured value cannot
+                               stall indefinitely.
+      LIFELINE_REPLAY_MODE=1   shortcut: forces base=2. Set automatically by
+                               help_bot_runner.py for --mode replay and
+                               --verify-tts; set manually for ad-hoc tests.
+
+    Worst-case terminal stall (3 attempts, default base 15) = 15+30 = 45s/turn.
+    In replay mode (base 2) = 2+4 = 6s/turn.
     """
     import time
+
+    # Auto-fast-fail when the runner has flagged a replay/test run; otherwise
+    # honour the explicit per-base env var, then fall back to the default 15s.
+    if os.environ.get("LIFELINE_REPLAY_MODE", "").lower() in ("1", "true", "yes"):
+        base_backoff_s = 2
+    else:
+        base_backoff_s = int(os.environ.get("TRIAGE_RETRY_BACKOFF_S", "15"))
 
     attempts = int(os.environ.get("TRIAGE_QUOTA_RETRIES", "3"))
     for attempt in range(1, attempts + 1):
@@ -88,9 +108,10 @@ def _call_with_retry(fn, step_name: str):
                 raise
             if attempt == attempts:
                 raise
-            wait_s = min(15 * attempt, 60)
+            wait_s = min(base_backoff_s * attempt, 60)
+            mode_tag = " (replay-mode fast backoff)" if base_backoff_s == 2 else ""
             print(f"  [TRIAGE RETRY] {step_name} hit a quota limit; "
-                  f"waiting {wait_s}s (attempt {attempt}/{attempts - 1}).")
+                  f"waiting {wait_s}s (attempt {attempt}/{attempts - 1}){mode_tag}.")
             time.sleep(wait_s)
 
 
@@ -182,6 +203,13 @@ class Incident(BaseModel):
     bhu_notify_timestamp: Optional[str] = None
     ambulance_requested: bool = False
     outcome: Optional[OutcomeType] = None
+    # ADDITIVE (Module 6): Who confirmed the outcome — required for closure.
+    # "responder" = self-reported, "bhu_staff" = verified by the BHU side
+    # (the confirmation Module 5's points awarding will key off).
+    outcome_confirmed_by: Optional[Literal["responder", "bhu_staff"]] = None
+    # ADDITIVE (Module 6): ISO timestamp when the incident was closed with a
+    # confirmed outcome. None = incident still open.
+    incident_closed_timestamp: Optional[str] = None
     # ADDITIVE (Module 2): Responder Help Bot state-transition log. Never
     # written by Module 1; appended by the help-bot session (branch entered,
     # steps, intents, escalations) for later Module 5 accountability review.
@@ -641,6 +669,18 @@ def dispatch(incident: Incident, responder: Optional[Responder], bhu: Optional[B
         incident.responder_dispatch_timestamp = now_iso
         # CRITICAL FIX: Mutate state to busy so responder cannot be double-assigned
         responder.current_availability_status = "busy"
+        # Part B persistence fix: this legacy vertical-slice dispatch path is a
+        # real availability mutation, so it writes through to PostgreSQL like
+        # Module 3's dispatchIncident does — otherwise a restart would revert a
+        # genuinely busy responder to their hardcoded seed default and allow a
+        # double-dispatch. Narrow update (status column only) so Module 5's
+        # status_flag is preserved. Lazy import + non-fatal: Module 1 stays
+        # importable and runnable without the DB layer.
+        try:
+            from models.responder_model import update_responder_availability
+            update_responder_availability(responder.responder_id, "busy")
+        except Exception as exc:
+            print(f"  [DISPATCH WARNING] DB write-through for busy status failed (non-fatal): {exc}")
 
     if tier in ["moderate", "critical"]:
         incident.bhu_notified = True

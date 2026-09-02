@@ -14,8 +14,11 @@ Hard rules implemented here:
   (routing). It never composes what the responder hears.
 - Provider boundary mirrors Module 1 exactly: gemini_* implementations are
   active, dashscope_* implementations are isolated behind TRIAGE_AI_PROVIDER,
-  every call has the shared TRIAGE_CALL_TIMEOUT_S timeout + quota retry, and
-  failures route to a pre-rendered Urdu fail-safe line (never silence/hang).
+  every call has the shared TRIAGE_CALL_TIMEOUT_S timeout + quota retry
+  (env-driven backoff: TRIAGE_RETRY_BACKOFF_S, default 15s; auto-fast-fail
+  when LIFELINE_REPLAY_MODE=1, used by help_bot_runner.py for replay/verify
+  runs so a rate-limited call doesn't stall 45s/turn), and failures route
+  to a pre-rendered Urdu fail-safe line (never silence/hang).
 - escalateIncident() below is THE clean integration point for the future
   Module 3/8: wire them by calling it, not by rewriting it.
 """

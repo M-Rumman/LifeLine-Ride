@@ -32,6 +32,11 @@ if str(_BACKEND_DIR) not in [str(p) for p in sys.path]:
 # ---------------------------------------------------------------------------
 os.environ["DISPATCH_ACK_TIMEOUT_S"] = "2"
 
+# Speed up the AI retry backoff too so a quota-exhausted fallback call in the
+# backward-compat run_test_suite() check below doesn't stall 45s/turn
+# (15s + 30s default backoff). Matches the same test-fast-fail pattern.
+os.environ["LIFELINE_REPLAY_MODE"] = "1"
+
 import slice_runner  # noqa: E402  Module 1 contracts + seed data
 from services.dispatch_service import (  # noqa: E402
     DispatchDecision,

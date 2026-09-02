@@ -14,8 +14,11 @@ Usage (run from the repo root or backend/):
                 to the help bot.
 --mode mic      live hands-free loop (sounddevice mic + speaker, barge-in).
 --mode replay   deterministic script of responder turns (the verification path).
+                Auto-sets LIFELINE_REPLAY_MODE=1 so quota-exhausted AI calls
+                fail fast (2s backoff) instead of stalling 45s/turn.
 --verify-tts    spoken-Urdu check: TTS one guidance line per branch, then STT
                 the generated audio back and print source vs transcript.
+                Also auto-sets LIFELINE_REPLAY_MODE=1.
 """
 from __future__ import annotations
 
@@ -189,6 +192,16 @@ def main() -> int:
     parser.add_argument("--verify-tts", action="store_true",
                         help="run the spoken-Urdu round-trip check and exit")
     args = parser.parse_args()
+
+    # Fail fast on quota exhaustion during deterministic test/replay paths so
+    # a rate-limited Gemini call doesn't stall the terminal for 45s/turn
+    # (default 15s + 30s backoff between 3 attempts). Mirrors the
+    # DISPATCH_ACK_TIMEOUT_S=2 trick test_module3.py uses to speed up tests.
+    # Live mic mode and --prewarm-tts are intentionally left on the default
+    # backoff: a real user can wait, and prewarm benefits from a real retry
+    # window so the cache actually gets filled.
+    if args.mode == "replay" or args.verify_tts:
+        os.environ["LIFELINE_REPLAY_MODE"] = "1"
 
     if args.prewarm_tts:
         prewarm_tts()
