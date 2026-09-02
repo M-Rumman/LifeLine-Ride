@@ -558,30 +558,170 @@ def responder_performance_record(responder_id: str):
     return accountability_service.getResponderPerformanceRecord(responder_id)
 
 
+from services import onboarding_service
+
+
+class RegisterResponderRequest(BaseModel):
+    name: str
+    village: str
+    phone_number: str
+    linked_bhu_id: str
+    responder_id: Optional[str] = None
+    training_completed: bool = False
+    training_org: Optional[str] = None
+    equipment_checklist: Optional[list] = None
+
+
+class VerifyResponderRequest(BaseModel):
+    verified_by: str
+    equipment_checklist: list
+
+
 # ===========================================================================
-# 7. RESPONDER REGISTRY VIEW — read-only availability snapshot
+# 7. RESPONDER ONBOARDING & REGISTRY VIEWS (Module 7)
 # ===========================================================================
+
+@router.post("/responders/register", status_code=201)
+def register_responder(body: RegisterResponderRequest):
+    """Register a new candidate responder profile.
+
+    Candidate starts in an unverified state (is_verified=False,
+    current_availability_status='unverified') and cannot be dispatched until
+    verified by an authorized trainer or BHU.
+    """
+    try:
+        data = body.model_dump()
+        created = onboarding_service.registerCandidateResponder(data)
+        return created
+    except ValueError as exc:
+        raise ApiError(400, "INVALID_REGISTRATION", str(exc))
+    except Exception as exc:
+        raise ApiError(500, "REGISTRATION_FAILED", f"Registration failed: {exc}")
+
+
+@router.post("/responders/{responder_id}/verify", status_code=200)
+def verify_responder(responder_id: str, body: VerifyResponderRequest):
+    """Admin / trainer sign-off endpoint to verify a responder."""
+    try:
+        verified = onboarding_service.signOffResponder(
+            responder_id=responder_id,
+            verified_by=body.verified_by,
+            equipment_checklist=body.equipment_checklist,
+        )
+        return verified
+    except KeyError as exc:
+        raise ApiError(404, "RESPONDER_NOT_FOUND", str(exc))
+    except ValueError as exc:
+        raise ApiError(400, "INVALID_VERIFICATION", str(exc))
+    except Exception as exc:
+        raise ApiError(500, "VERIFICATION_FAILED", f"Verification failed: {exc}")
+
+
+@router.get("/responders/pending")
+def list_pending_responders(village_id: Optional[str] = None):
+    """List all candidate responders awaiting verification review."""
+    pending = onboarding_service.listPendingVerifications(village_id=village_id)
+    return {
+        "pending_responders": pending,
+        "count": len(pending),
+    }
+
 
 @router.get("/responders")
-def list_responders():
-    """In-memory responder registry with live availability status.
+def list_responders(
+    village_id: Optional[str] = None,
+    verified: Optional[bool] = None,
+):
+    """In-memory responder registry with live availability & verification status.
 
-    Read-only: no mutation, no DB write. Reports the SAME in-memory
-    SEED_RESPONDERS state Module 3 matches against, which is what makes the
-    Part B restart property observable over HTTP — after a process restart
-    main.bootstrap_responder_state() reloads these statuses from PostgreSQL,
-    so a responder dispatched before the restart still shows "busy" here
-    instead of reverting to the hardcoded seed default.
+    Optionally filter by village_id and verified boolean.
     """
+    responders = []
+    for r in slice_runner.SEED_RESPONDERS:
+        if village_id is not None and r.village != village_id:
+            continue
+        is_ver = getattr(r, "is_verified", False)
+        if verified is not None and is_ver != verified:
+            continue
+        responders.append({
+            "responder_id": r.responder_id,
+            "name": r.name,
+            "village": r.village,
+            "linked_bhu_id": r.linked_bhu_id,
+            "current_availability_status": r.current_availability_status,
+            "phone_number": getattr(r, "phone_number", None),
+            "is_verified": is_ver,
+            "verified_by": getattr(r, "verified_by", None),
+            "verified_at": getattr(r, "verified_at", None),
+            "equipment_checklist": getattr(r, "equipment_checklist", None),
+        })
     return {
-        "responders": [
-            {
-                "responder_id": r.responder_id,
-                "name": r.name,
-                "village": r.village,
-                "linked_bhu_id": r.linked_bhu_id,
-                "current_availability_status": r.current_availability_status,
-            }
-            for r in slice_runner.SEED_RESPONDERS
-        ],
+        "responders": responders,
     }
+
+
+# ===========================================================================
+# 8. MODULE 8 & 9: REPORTER TIMELINE & RESPONDER ARRIVAL
+# ===========================================================================
+
+class ResponderArrivedRequest(BaseModel):
+    incident_id: str
+    responder_id: str
+
+
+@router.post("/responder/arrived")
+def responder_arrived(payload: ResponderArrivedRequest):
+    """Responder check-in upon reaching the incident location (Module 9)."""
+    record = _fresh_record(payload.incident_id)
+    if record is None:
+        raise ApiError(404, "INCIDENT_NOT_FOUND",
+                       f"Incident {payload.incident_id} is not registered.")
+    try:
+        update_entry = lifecycle.recordResponderArrival(payload.incident_id, payload.responder_id)
+        return {
+            "status": "ok",
+            "incident_id": payload.incident_id,
+            "arrival_update": update_entry,
+        }
+    except ValueError as exc:
+        raise ApiError(400, "INVALID_ARRIVAL", str(exc))
+    except Exception as exc:
+        raise ApiError(500, "ARRIVAL_FAILED", f"Arrival check-in failed: {exc}")
+
+
+@router.get("/emergency/incident/{incident_id}/timeline")
+def get_incident_timeline(incident_id: str):
+    """Dedicated endpoint for distressed reporter status tracking (Module 9).
+
+    Returns lightweight chronological Urdu status updates, coverage gap flags,
+    and current lifecycle stage without expensive long-polling.
+    """
+    record = _fresh_record(incident_id)
+    if record is None:
+        raise ApiError(404, "INCIDENT_NOT_FOUND",
+                       f"Incident {incident_id} is not registered.")
+
+    inc = record.get("incident", {})
+    dispatch_status = record.get("dispatch_status")
+    if inc.get("incident_closed_timestamp") is not None:
+        current_status = "closed"
+    elif dispatch_status is not None:
+        current_status = dispatch_status
+    elif inc.get("responder_assigned_id"):
+        current_status = "dispatched"
+    elif inc.get("bhu_notified"):
+        current_status = "escalated_bhu_only"
+    else:
+        current_status = "open"
+
+    return {
+        "incident_id": inc.get("incident_id", incident_id),
+        "status": current_status,
+        "severity_tier": inc.get("severity_tier"),
+        "assigned_responder": inc.get("responder_assigned_id"),
+        "coverage_gap": bool(inc.get("coverage_gap", False)),
+        "mid_incident_escalated": bool(inc.get("mid_incident_escalated", False)),
+        "updates": inc.get("reporter_updates") or [],
+    }
+
+

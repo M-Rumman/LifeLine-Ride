@@ -644,10 +644,22 @@ def escalateIncident(incident_id: str, new_signals: dict) -> dict:
         },
     }
     incident.help_bot_transitions.append(event)
+
+    # Module 8 & 9 telemetry: mark mid_incident_escalated and log audit event
+    incident.mid_incident_escalated = True
+    incident.dispatch_events.append({
+        "event": "mid_incident_escalation",
+        "trigger_line": trigger,
+        "upgraded_tier": incident.severity_tier,
+        "ambulance_requested": incident.ambulance_requested,
+        "timestamp": now,
+    })
+
     _sync_store_snapshot(incident)
     print(f"  [ESCALATION] {incident_id}: severity {old_tier} -> {incident.severity_tier} "
           f"(trigger: {trigger})")
     return incident.model_dump()
+
 
 
 def _sync_store_snapshot(incident) -> None:

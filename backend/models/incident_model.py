@@ -88,6 +88,12 @@ class IncidentRecord(Base):
     dispatch_events              = Column(JSONB, nullable=True)  # list[dict]
     dispatch_fallback_count      = Column(Integer, nullable=True, default=0)
 
+    # ----- Module 8 & 9: Coverage Gaps, Escalation & Localized Reporter Updates -----
+    coverage_gap                 = Column(Boolean,      nullable=False, default=False)
+    mid_incident_escalated       = Column(Boolean,      nullable=False, default=False)
+    responder_arrived_timestamp  = Column(VARCHAR(64),  nullable=True)
+    reporter_updates             = Column(JSONB,        nullable=True)  # list[dict]
+
     # ----- logIncident wrapper fields -----
     dispatch_status              = Column(VARCHAR(32),  nullable=True)
     logged_at                    = Column(VARCHAR(64),  nullable=True)
@@ -140,6 +146,10 @@ def _row_to_store_dict(row: IncidentRecord) -> dict:
         "help_bot_transitions":          row.help_bot_transitions or [],
         "dispatch_events":               row.dispatch_events or [],
         "dispatch_fallback_count":       row.dispatch_fallback_count or 0,
+        "coverage_gap":                  bool(row.coverage_gap),
+        "mid_incident_escalated":        bool(row.mid_incident_escalated),
+        "responder_arrived_timestamp":  row.responder_arrived_timestamp,
+        "reporter_updates":              row.reporter_updates or [],
     }
     record: dict = {"incident": inc}
     if row.dispatch_status is not None:
@@ -184,10 +194,15 @@ def _store_dict_to_kwargs(store_record: dict) -> dict:
         help_bot_transitions=inc.get("help_bot_transitions") or [],
         dispatch_events=inc.get("dispatch_events") or [],
         dispatch_fallback_count=inc.get("dispatch_fallback_count") or 0,
+        coverage_gap=bool(inc.get("coverage_gap", False)),
+        mid_incident_escalated=bool(inc.get("mid_incident_escalated", False)),
+        responder_arrived_timestamp=inc.get("responder_arrived_timestamp"),
+        reporter_updates=inc.get("reporter_updates") or [],
         dispatch_status=store_record.get("dispatch_status"),
         logged_at=store_record.get("logged_at"),
         closed_at=store_record.get("closed_at"),
     )
+
 
 
 # ===========================================================================
@@ -321,6 +336,68 @@ def rehydrate_store_from_db() -> int:
     return loaded
 
 
+def append_reporter_update(
+    incident_id: str,
+    stage: str,
+    message_urdu: str,
+    severity_tier: str,
+) -> dict:
+    """Appends a timestamped localized update to both memory and DB.
+
+    Entry structure:
+        {
+            "update_id": "UPD-...",
+            "timestamp": "...",
+            "stage": stage,
+            "message_urdu": message_urdu,
+            "severity_tier": severity_tier
+        }
+    """
+    import uuid
+    from datetime import datetime, timezone
+    import slice_runner
+
+    now = datetime.now(timezone.utc).isoformat()
+    update_entry = {
+        "update_id": f"UPD-{uuid.uuid4().hex[:6].upper()}",
+        "timestamp": now,
+        "stage": stage,
+        "message_urdu": message_urdu,
+        "severity_tier": severity_tier,
+    }
+
+    # 1. Check in-memory INCIDENT_STORE
+    found = False
+    for record in slice_runner.INCIDENT_STORE:
+        inc = record.get("incident")
+        if inc and inc.get("incident_id") == incident_id:
+            updates = inc.setdefault("reporter_updates", [])
+            updates.append(update_entry)
+            found = True
+            try:
+                upsert_incident_to_db(record)
+            except Exception:
+                pass
+            break
+
+    # 2. If not found in memory, update DB directly
+    if not found:
+        db = SessionLocal()
+        try:
+            row = db.query(IncidentRecord).filter(IncidentRecord.incident_id == incident_id).first()
+            if row:
+                current_updates = list(row.reporter_updates or [])
+                current_updates.append(update_entry)
+                row.reporter_updates = current_updates
+                db.commit()
+        except Exception:
+            db.rollback()
+        finally:
+            db.close()
+
+    return update_entry
+
+
 def truncate_incidents_table() -> None:
     """Delete all rows from the incidents table.
 
@@ -335,3 +412,4 @@ def truncate_incidents_table() -> None:
         raise RuntimeError(f"truncate_incidents_table failed: {exc}") from exc
     finally:
         db.close()
+

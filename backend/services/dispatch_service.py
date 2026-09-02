@@ -39,8 +39,10 @@ from __future__ import annotations
 
 import os
 import threading
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
+
 from typing import List, Literal, Optional
 
 # ---------------------------------------------------------------------------
@@ -173,13 +175,15 @@ def decideDispatch(incident: slice_runner.Incident) -> DispatchDecision:
         None
     )
 
-    # --- Ranked responder list: village-filtered, available-only ---
+    # --- Ranked responder list: village-filtered, available-only, verified-only ---
     # Order preserves SEED_RESPONDERS list position (deterministic; matches
     # the Farhan Ali fallback already proven in the vertical slice).
+    # Module 7: unverified responders must never appear in dispatch candidate rankings.
     ranked = [
         r for r in slice_runner.SEED_RESPONDERS
         if r.village == village_id
         and r.current_availability_status == "available"
+        and getattr(r, "is_verified", False) is True
     ]
 
     # --- No available responder: escalate to BHU-only ---
@@ -258,6 +262,40 @@ def sendNotification(
     now = _now_iso()
     tier = incident.severity_tier
 
+    # --- Persist dispatch state for fallback walker immediately ---
+    with _STATE_LOCK:
+        existing = _DISPATCH_STATE.get(incident.incident_id, {})
+        _DISPATCH_STATE[incident.incident_id] = {
+            "incident": incident,
+            "ranked_responders": decision.ranked_responders,
+            "fallback_index": existing.get("fallback_index", 0),
+            "ack_timer": existing.get("ack_timer"),
+            "dispatched_tier": tier,
+            "bhu_already_notified": incident.bhu_notified,
+            "ambulance_already_requested": incident.ambulance_requested,
+        }
+
+    # --- Module 9: Initial "reported" status if not already present ---
+    if not any(u.get("stage") == "reported" for u in incident.reporter_updates):
+        incident.reporter_updates.append({
+            "update_id": f"UPD-{uuid.uuid4().hex[:6].upper()}",
+            "timestamp": now,
+            "stage": "reported",
+            "message_urdu": "آپ کی ایمرجنسی کی اطلاع موصول ہو چکی ہے۔ سسٹم قریبی رضاکار تلاش کر رہا ہے۔",
+            "severity_tier": tier,
+        })
+
+    # --- Module 8: Coverage gap check (no available responder in village) ---
+    if decision.status in ("escalated_bhu_only", "no_resources") or not decision.selected_responder:
+        incident.coverage_gap = True
+        if not any(e.get("event") == "coverage_gap_flagged" for e in incident.dispatch_events):
+            _append_dispatch_event(incident, {
+                "event": "coverage_gap_flagged",
+                "village_id": incident.gps_location.village_id,
+                "timestamp": now,
+                "reason": "candidates_exhausted_or_unavailable",
+            })
+
     # --- Responder notification ---
     if decision.selected_responder:
         r = decision.selected_responder
@@ -271,6 +309,14 @@ def sendNotification(
             "responder_id": r.responder_id,
             "responder_name": r.name,
             "tier": tier,
+        })
+        # Module 9: Append responder_notified update
+        incident.reporter_updates.append({
+            "update_id": f"UPD-{uuid.uuid4().hex[:6].upper()}",
+            "timestamp": now,
+            "stage": "responder_notified",
+            "message_urdu": f"مددگار {r.name} کو اطلاع دے دی گئی ہے۔",
+            "severity_tier": tier,
         })
         # Start ack timeout timer BEFORE the DB write-through. The responder's
         # timeout window must be measured from the dispatch decision; a slow
@@ -319,6 +365,21 @@ def sendNotification(
             event_payload["reason"] = "no_available_responders"
         _append_dispatch_event(incident, event_payload)
 
+        # Module 9: Localized BHU notification update
+        if not any(u.get("stage") == "bhu_notified" for u in incident.reporter_updates):
+            bhu_msg = (
+                "بنیادی مرکزِ صحت کو فوری ایمرجنسی الرٹ بھیج دیا گیا ہے۔"
+                if urgency_label == "urgent"
+                else "قریبی بنیادی مرکزِ صحت (BHU) کو الرٹ کر دیا گیا ہے۔"
+            )
+            incident.reporter_updates.append({
+                "update_id": f"UPD-{uuid.uuid4().hex[:6].upper()}",
+                "timestamp": now,
+                "stage": "bhu_notified",
+                "message_urdu": bhu_msg,
+                "severity_tier": tier,
+            })
+
     elif not decision.notify_bhu and decision.status in ("escalated_bhu_only", "no_resources"):
         # Edge case: escalated but no BHU linked at all.
         _warn(
@@ -341,19 +402,17 @@ def sendNotification(
             "event": "ambulance_requested",
             "tier": tier,
         })
+        # Module 9: Localized ambulance update
+        if not any(u.get("stage") == "ambulance_en_route" for u in incident.reporter_updates):
+            incident.reporter_updates.append({
+                "update_id": f"UPD-{uuid.uuid4().hex[:6].upper()}",
+                "timestamp": now,
+                "stage": "ambulance_en_route",
+                "message_urdu": "مریض کی نازک حالت کے پیشِ نظر ایمبولینس کو مطلع کر دیا گیا ہے۔",
+                "severity_tier": tier,
+            })
 
-    # --- Persist dispatch state for fallback walker ---
-    with _STATE_LOCK:
-        existing = _DISPATCH_STATE.get(incident.incident_id, {})
-        _DISPATCH_STATE[incident.incident_id] = {
-            "incident": incident,
-            "ranked_responders": decision.ranked_responders,
-            "fallback_index": existing.get("fallback_index", 0),
-            "ack_timer": existing.get("ack_timer"),
-            "dispatched_tier": tier,
-            "bhu_already_notified": incident.bhu_notified,
-            "ambulance_already_requested": incident.ambulance_requested,
-        }
+
 
 
 # ===========================================================================
@@ -404,6 +463,19 @@ def acknowledgeDispatch(incident_id: str, responder_id: str) -> None:
         _append_dispatch_event(incident, {
             "event": "responder_acknowledged",
             "responder_id": responder_id,
+        })
+        # Module 9: responder_en_route update
+        responder_name = "رضاکار"
+        for r in slice_runner.SEED_RESPONDERS:
+            if r.responder_id == responder_id:
+                responder_name = r.name
+                break
+        incident.reporter_updates.append({
+            "update_id": f"UPD-{uuid.uuid4().hex[:6].upper()}",
+            "timestamp": _now_iso(),
+            "stage": "responder_en_route",
+            "message_urdu": f"مددگار {responder_name} نے الرٹ قبول کر لیا ہے اور وہ جائے وقوعہ کی طرف روانہ ہیں۔",
+            "severity_tier": incident.severity_tier,
         })
     _log(f"Responder {responder_id} acknowledged dispatch for {incident_id}.")
 
@@ -466,6 +538,14 @@ def _fallback_dispatch(incident_id: str, reason: str = "unknown") -> None:
         sendNotification(next_decision, incident)
     else:
         # Ranked list exhausted — BHU-only escalation.
+        incident.coverage_gap = True
+        if not any(e.get("event") == "coverage_gap_flagged" for e in incident.dispatch_events):
+            _append_dispatch_event(incident, {
+                "event": "coverage_gap_flagged",
+                "village_id": incident.gps_location.village_id,
+                "timestamp": _now_iso(),
+                "reason": "candidates_exhausted_or_unavailable",
+            })
         _log(f"Ranked list exhausted for {incident_id}. Escalating to BHU-only.")
         print(f"  [DISPATCH WARNING] All ranked responders exhausted for "
               f"{incident_id}. Escalating to BHU-only.")
@@ -580,6 +660,8 @@ def handleEscalation(incident_id: str, escalation_snapshot: dict) -> None:
         incident = updated
 
     new_tier = incident.severity_tier
+    incident.mid_incident_escalated = True
+
     _log(f"Escalation re-dispatch for {incident_id}: tier={new_tier} | "
          f"bhu_was_notified={bhu_already_notified} | "
          f"ambulance_was_requested={ambulance_already}")
@@ -590,6 +672,22 @@ def handleEscalation(incident_id: str, escalation_snapshot: dict) -> None:
         "bhu_already_notified": bhu_already_notified,
         "ambulance_already_requested": ambulance_already,
     })
+
+    # Module 8 & 9 telemetry: log mid_incident_escalation audit event if not present
+    trigger_phrase = (
+        escalation_snapshot.get("trigger_phrase")
+        or escalation_snapshot.get("trigger")
+        or (escalation_snapshot.get("detail", {}).get("trigger") if isinstance(escalation_snapshot.get("detail"), dict) else None)
+        or "condition_worsened"
+    )
+    if not any(e.get("event") == "mid_incident_escalation" for e in incident.dispatch_events):
+        _append_dispatch_event(incident, {
+            "event": "mid_incident_escalation",
+            "trigger_line": trigger_phrase,
+            "upgraded_tier": new_tier,
+            "ambulance_requested": incident.ambulance_requested,
+            "timestamp": _now_iso(),
+        })
 
     # Find the linked BHU for this incident.
     village_id = incident.gps_location.village_id
@@ -646,6 +744,16 @@ def handleEscalation(incident_id: str, escalation_snapshot: dict) -> None:
             "event": "ambulance_requested_escalation",
             "new_tier": new_tier,
         })
+        # Module 9: Localized ambulance update on escalation
+        if not any(u.get("stage") == "ambulance_en_route" for u in incident.reporter_updates):
+            incident.reporter_updates.append({
+                "update_id": f"UPD-{uuid.uuid4().hex[:6].upper()}",
+                "timestamp": _now_iso(),
+                "stage": "ambulance_en_route",
+                "message_urdu": "مریض کی نازک حالت کے پیشِ نظر ایمبولینس کو مطلع کر دیا گیا ہے۔",
+                "severity_tier": new_tier,
+            })
+
 
     # Update _DISPATCH_STATE so future escalations diff correctly.
     with _STATE_LOCK:

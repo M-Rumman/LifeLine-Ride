@@ -179,7 +179,7 @@ else:
 
 SeverityTier = Literal["minor", "moderate", "critical"]
 OutcomeType = Literal["self-resolved", "taken_to_bhu", "referred_to_hospital", "unresolved"]
-AvailabilityStatus = Literal["available", "busy", "offline"]
+AvailabilityStatus = Literal["unverified", "available", "busy", "offline"]
 
 
 class GPSLocation(BaseModel):
@@ -222,6 +222,17 @@ class Incident(BaseModel):
     # this incident (responder timeout or explicit decline). Zero = primary
     # responder dispatched and acknowledged (or BHU-only from the start).
     dispatch_fallback_count: int = 0
+    # ADDITIVE (Module 8): Village coverage gap flag — True when all village candidates
+    # are exhausted / unavailable and the incident had to escalate to BHU-only.
+    coverage_gap: bool = False
+    # ADDITIVE (Module 8): Mid-incident condition escalation flag — True if
+    # upgraded from within a help-bot session.
+    mid_incident_escalated: bool = False
+    # ADDITIVE (Module 9): Responder arrival check-in timestamp.
+    responder_arrived_timestamp: Optional[str] = None
+    # ADDITIVE (Module 9): Localized Urdu timeline status updates for distressed reporters.
+    reporter_updates: List[dict] = []
+
 
 
 class Responder(BaseModel):
@@ -231,6 +242,13 @@ class Responder(BaseModel):
     linked_bhu_id: str
     current_availability_status: AvailabilityStatus
     points_total: int = 0
+    phone_number: Optional[str] = None
+    is_verified: bool = False
+    verified_by: Optional[str] = None
+    verified_at: Optional[str] = None
+    training_completed: bool = False
+    training_org: Optional[str] = None
+    equipment_checklist: Optional[List[str]] = None
 
 
 class BHU(BaseModel):
@@ -274,7 +292,14 @@ SEED_RESPONDERS: List[Responder] = [
         village="VILLAGE-A",
         linked_bhu_id="BHU-001",
         current_availability_status="busy",
-        points_total=120
+        points_total=120,
+        phone_number="+923001234561",
+        is_verified=True,
+        verified_by="SEED_ADMIN",
+        verified_at="2026-01-01T00:00:00+00:00",
+        training_completed=True,
+        training_org="Pakistan Red Crescent",
+        equipment_checklist=["tourniquet", "pressure_bandages", "splints", "antiseptic"],
     ),
     Responder(
         responder_id="RESP-02",
@@ -282,7 +307,14 @@ SEED_RESPONDERS: List[Responder] = [
         village="VILLAGE-A",
         linked_bhu_id="BHU-001",
         current_availability_status="available",
-        points_total=45
+        points_total=45,
+        phone_number="+923001234562",
+        is_verified=True,
+        verified_by="SEED_ADMIN",
+        verified_at="2026-01-01T00:00:00+00:00",
+        training_completed=True,
+        training_org="Rescue 1122",
+        equipment_checklist=["tourniquet", "pressure_bandages", "splints", "antiseptic"],
     ),
     Responder(
         responder_id="RESP-03",
@@ -290,7 +322,14 @@ SEED_RESPONDERS: List[Responder] = [
         village="VILLAGE-B",
         linked_bhu_id="BHU-001",
         current_availability_status="offline",
-        points_total=80
+        points_total=80,
+        phone_number="+923001234563",
+        is_verified=True,
+        verified_by="SEED_ADMIN",
+        verified_at="2026-01-01T00:00:00+00:00",
+        training_completed=True,
+        training_org="Pakistan Red Crescent",
+        equipment_checklist=["tourniquet", "pressure_bandages", "splints", "antiseptic"],
     ),
     Responder(
         responder_id="RESP-04",
@@ -298,7 +337,14 @@ SEED_RESPONDERS: List[Responder] = [
         village="VILLAGE-B",
         linked_bhu_id="BHU-001",
         current_availability_status="busy",
-        points_total=15
+        points_total=15,
+        phone_number="+923001234564",
+        is_verified=True,
+        verified_by="SEED_ADMIN",
+        verified_at="2026-01-01T00:00:00+00:00",
+        training_completed=True,
+        training_org="DoH",
+        equipment_checklist=["tourniquet", "pressure_bandages", "splints", "antiseptic"],
     ),
     Responder(
         responder_id="RESP-05",
@@ -306,7 +352,14 @@ SEED_RESPONDERS: List[Responder] = [
         village="VILLAGE-C",
         linked_bhu_id="BHU-002",
         current_availability_status="available",
-        points_total=210
+        points_total=210,
+        phone_number="+923001234565",
+        is_verified=True,
+        verified_by="SEED_ADMIN",
+        verified_at="2026-01-01T00:00:00+00:00",
+        training_completed=True,
+        training_org="Rescue 1122",
+        equipment_checklist=["tourniquet", "pressure_bandages", "splints", "antiseptic"],
     )
 ]
 

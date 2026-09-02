@@ -51,8 +51,8 @@ os.environ["LIFELINE_REPLAY_MODE"] = "1"
 _PORT = int(os.environ.get("LIVE_TEST_PORT", "5050"))
 _BASE_URL = f"http://127.0.0.1:{_PORT}"
 _API = f"{_BASE_URL}/api/v1"
-_STARTUP_TIMEOUT_S = 30      # max seconds to wait for uvicorn to bind
-_SHUTDOWN_TIMEOUT_S = 10     # max seconds to wait for process exit
+_STARTUP_TIMEOUT_S = 60      # max seconds to wait for uvicorn to bind
+_SHUTDOWN_TIMEOUT_S = 15     # max seconds to wait for process exit
 _POLL_INTERVAL_S = 0.3       # health-check polling interval
 
 

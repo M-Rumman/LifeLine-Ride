@@ -45,9 +45,11 @@ Accountability contract (Module 5 readiness):
 from __future__ import annotations
 
 import json
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
+
 
 # ---------------------------------------------------------------------------
 # Import path: allow both `import incident_lifecycle_service` (from
@@ -280,6 +282,22 @@ def closeIncident(
         "responder_released": released_id,
     })
 
+    # --- Module 9: Append localized closure update ---
+    if outcome == "taken_to_bhu":
+        close_msg = "مریض کو بحفاظت بنیادی مرکزِ صحت منتقل کر دیا گیا ہے۔ ایمرجنسی مکمل ہو چکی ہے۔"
+    elif outcome == "self-resolved":
+        close_msg = "ابتدائی طبی امداد مکمل ہو گئی ہے اور صورتحال قابو میں ہے۔ شکریہ۔"
+    else:  # referred_to_hospital or unresolved
+        close_msg = "ایمرجنسی کارروائی مکمل ہو گئی ہے اور متعلقہ ہسپتال کو رپورٹ بھیج دی گئی ہے۔"
+
+    incident.reporter_updates.append({
+        "update_id": f"UPD-{uuid.uuid4().hex[:6].upper()}",
+        "timestamp": now,
+        "stage": "closed",
+        "message_urdu": close_msg,
+        "severity_tier": incident.severity_tier,
+    })
+
     # --- Sync the store snapshot (full lifecycle in one record) ---
     _sync_store_snapshot(incident)
 
@@ -299,6 +317,61 @@ def closeIncident(
     _log(f"Incident {incident_id} closed: outcome={outcome} "
          f"confirmed_by={confirmed_by} (responder_released={released_id}).")
     return incident.model_dump()
+
+
+def recordResponderArrival(incident_id: str, responder_id: str) -> dict:
+    """Record that the dispatched responder has arrived on scene (Module 9).
+
+    Sets responder_arrived_timestamp, logs 'responder_arrived' in dispatch_events,
+    and appends the localized Urdu update to reporter_updates.
+    Persists to PostgreSQL and syncs INCIDENT_STORE.
+    """
+    incident = _get_live_incident(incident_id)
+    if incident is None:
+        raise ValueError(f"recordResponderArrival: unknown incident {incident_id}")
+
+    now = _now_iso()
+    incident.responder_arrived_timestamp = now
+
+    responder_name = "رضاکار"
+    for r in slice_runner.SEED_RESPONDERS:
+        if r.responder_id == responder_id:
+            responder_name = r.name
+            break
+
+    # 1. Log arrival in dispatch_events
+    incident.dispatch_events.append({
+        "event": "responder_arrived",
+        "responder_id": responder_id,
+        "responder_name": responder_name,
+        "timestamp": now,
+    })
+
+    # 2. Append localized Urdu update
+    update_entry = {
+        "update_id": f"UPD-{uuid.uuid4().hex[:6].upper()}",
+        "timestamp": now,
+        "stage": "responder_arrived",
+        "message_urdu": f"مددگار {responder_name} جائے وقوعہ پر پہنچ چکے ہیں۔",
+        "severity_tier": incident.severity_tier,
+    }
+    incident.reporter_updates.append(update_entry)
+
+    # 3. Sync INCIDENT_STORE & PostgreSQL
+    _sync_store_snapshot(incident)
+    store_record = next(
+        (r for r in slice_runner.INCIDENT_STORE
+         if r["incident"].get("incident_id") == incident_id),
+        None,
+    )
+    if store_record is not None:
+        _db_upsert(store_record)
+    else:
+        _db_upsert({"incident": incident.model_dump()})
+
+    _log(f"Responder arrival recorded for {incident_id} ({responder_id} - {responder_name}).")
+    return update_entry
+
 
 
 # ===========================================================================
