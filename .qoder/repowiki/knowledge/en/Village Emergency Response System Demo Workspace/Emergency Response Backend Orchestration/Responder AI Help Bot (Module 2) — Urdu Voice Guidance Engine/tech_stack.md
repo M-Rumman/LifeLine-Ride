@@ -1,1 +1,0 @@
-Python with Google GenAI (Gemini STT + `gemini-3.1-flash-tts-preview` TTS, voice `Kore`), optional DashScope swap-back targets (`SenseVoice-v1` ASR, `qwen-plus` classifier, CosyVoice TTS placeholder), `sounddevice`/`numpy`/`soundfile` for live audio capture and playback, and a file-backed TTS cache keyed by SHA-1 of voice+text.

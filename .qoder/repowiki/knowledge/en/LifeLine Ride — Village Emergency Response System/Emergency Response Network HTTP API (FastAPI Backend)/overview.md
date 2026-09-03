@@ -1,0 +1,1 @@
+FastAPI application exposing Modules 1–9 of the village emergency response network as a single HTTP API backed by PostgreSQL, with in-memory responder and incident state reconciled on startup.

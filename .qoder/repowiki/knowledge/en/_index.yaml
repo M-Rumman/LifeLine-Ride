@@ -3,11 +3,11 @@ schema_version: 1
 locale: en-US
 branch: main
 nodes_managed: true
-exported_at: "2026-08-31T15:07:16Z"
+exported_at: "2026-09-03T08:20:47Z"
 modules:
     "":
-        dir_name: Village Emergency Response System Demo Workspace
-        title: Village Emergency Response System Demo Workspace
+        dir_name: LifeLine Ride — Village Emergency Response System
+        title: LifeLine Ride — Village Emergency Response System
         scope:
             - PROJECT.md
             - DEMO_SCRIPT.md
@@ -22,31 +22,18 @@ modules:
         depends_on: []
         related_to: []
     backend:
-        dir_name: Emergency Response Backend Orchestration
-        title: Emergency Response Backend Orchestration
+        dir_name: Emergency Response Network HTTP API (FastAPI Backend)
+        title: Emergency Response Network HTTP API (FastAPI Backend)
         scope:
             - backend/
-        source_files: []
-        children:
-            - backend/help_bot
-        depends_on: []
-        related_to:
-            - path: mockdata
-    backend/help_bot:
-        dir_name: Responder AI Help Bot (Module 2) — Urdu Voice Guidance Engine
-        title: Responder AI Help Bot (Module 2) — Urdu Voice Guidance Engine
-        scope:
-            - backend/help_bot_runner.py
-            - backend/services/help_bot_service.py
-            - backend/services/help_bot_content.py
         source_files: []
         children: []
         depends_on: []
         related_to:
             - path: mockdata
     mockdata:
-        dir_name: Help-Bot Simulation Mock Data & Replay Fixtures
-        title: Help-Bot Simulation Mock Data & Replay Fixtures
+        dir_name: Help-Bot Scenario Fixtures & Replay Artifacts
+        title: Help-Bot Scenario Fixtures & Replay Artifacts
         scope:
             - mockdata/
         source_files: []
@@ -54,4 +41,3 @@ modules:
         depends_on: []
         related_to:
             - path: backend
-            - path: backend/help_bot

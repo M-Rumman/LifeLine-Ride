@@ -1,1 +1,0 @@
-Console entrypoint and conversation engine that guides dispatched first responders through injury-specific, hardcoded Urdu first-aid steps via STT, intent classification, and cached TTS playback with barge-in.

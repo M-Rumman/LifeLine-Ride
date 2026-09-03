@@ -6,6 +6,8 @@
 - [help_bot_service.py](file://backend/services/help_bot_service.py)
 - [help_bot_runner.py](file://backend/help_bot_runner.py)
 - [slice_runner.py](file://backend/slice_runner.py)
+- [dispatch_service.py](file://backend/services/dispatch_service.py)
+- [test_module8_9.py](file://backend/test_module8_9.py)
 - [heavy_bleeding.json](file://mockdata/helpbot/scripts/heavy_bleeding.json)
 - [fracture_crush.json](file://mockdata/helpbot/scripts/fracture_crush.json)
 - [snakebite.json](file://mockdata/helpbot/scripts/snakebite.json)
@@ -14,12 +16,12 @@
 
 ## Update Summary
 **Changes Made**
-- Enhanced branch-specific protocol documentation with detailed medical guidance for all three injury types
-- Expanded voice processing pipeline documentation with VAD parameters and barge-in mechanics
-- Added comprehensive intent classification system details with provider boundaries
-- Updated TTS caching mechanisms with manifest tracking and prewarming capabilities
-- Enhanced escalation system documentation with incident state management
-- Added concrete examples from test runs showing real-world usage patterns
+- Enhanced help bot service integration with new incident tracking capabilities for Modules 8 & 9
+- Improved escalation handling with comprehensive audit trail and dispatch event logging
+- Added mid-incident escalation tracking with `mid_incident_escalated` flag and dispatch events
+- Integrated Module 3 dispatch service with help bot escalation system
+- Expanded testing framework with comprehensive Module 8 & 9 test coverage
+- Updated incident store synchronization with real-time escalation updates
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -33,9 +35,10 @@
 9. [TTS Caching and Audio Management](#tts-caching-and-audio-management)
 10. [Escalation and Incident Management](#escalation-and-incident-management)
 11. [Integration with Main Triage System](#integration-with-main-triage-system)
-12. [Performance Considerations](#performance-considerations)
-13. [Troubleshooting Guide](#troubleshooting-guide)
-14. [Conclusion](#conclusion)
+12. [Module 8 & 9 Enhanced Features](#module-8--9-enhanced-features)
+13. [Performance Considerations](#performance-considerations)
+14. [Troubleshooting Guide](#troubleshooting-guide)
+15. [Conclusion](#conclusion)
 
 ## Introduction
 The Responder Help Bot is a sophisticated hands-free Urdu voice guidance system designed specifically for first responders during emergency situations. This fully integrated Module 2 implementation provides comprehensive medical assistance through three specialized injury branches: heavy bleeding, fracture/crush injuries, and snakebite treatment.
@@ -48,7 +51,10 @@ Key features include:
 - **AI-Assisted Routing**: Intent classification using Gemini or DashScope providers
 - **Robust TTS Caching**: Pre-rendered audio files with manifest tracking for reliability
 - **Comprehensive Escalation**: Automatic severity tier upgrades and dispatch integration
+- **Enhanced Incident Tracking**: Module 8 & 9 integration with audit trails and dispatch events
 - **Fail-Safe Operations**: Graceful degradation when network or audio services fail
+
+**Updated** Enhanced integration with Modules 8 & 9 features including comprehensive incident tracking, mid-incident escalation auditing, and improved dispatch event logging for complete emergency response lifecycle management.
 
 ## Project Structure
 The help bot spans four primary modules with extensive supporting data:
@@ -58,22 +64,23 @@ graph TB
 A["help_bot_runner.py<br/>CLI Entry Point"] --> B["help_bot_service.py<br/>Conversation Engine"]
 B --> C["help_bot_content.py<br/>Medical Content & Branches"]
 B --> D["slice_runner.py<br/>Provider Integration"]
-B --> E["TTS Cache<br/>Pre-rendered Audio"]
-A --> F["Replay Scripts<br/>Test Scenarios"]
-B --> G["Audio Stack<br/>VAD + Playback"]
+B --> E["dispatch_service.py<br/>Module 3 Integration"]
+B --> F["TTS Cache<br/>Pre-rendered Audio (230 entries)"]
+E --> G["Incident Store<br/>Real-time Updates"]
+F --> H["Test Runs<br/>Audit Trail"]
 ```
 
 **Diagram sources**
 - [help_bot_runner.py:175-236](file://backend/help_bot_runner.py#L175-L236)
 - [help_bot_service.py:663-960](file://backend/services/help_bot_service.py#L663-L960)
 - [help_bot_content.py:21-255](file://backend/services/help_bot_content.py#L21-L255)
-- [slice_runner.py:1-745](file://backend/slice_runner.py#L1-745)
+- [dispatch_service.py:622-786](file://backend/services/dispatch_service.py#L622-L786)
 
 **Section sources**
-- [help_bot_runner.py:1-241](file://backend/help_bot_runner.py#L1-L241)
-- [help_bot_service.py:1-960](file://backend/services/help_bot_service.py#L1-L960)
+- [help_bot_runner.py:1-254](file://backend/help_bot_runner.py#L1-L254)
+- [help_bot_service.py:1-975](file://backend/services/help_bot_service.py#L1-L975)
 - [help_bot_content.py:1-255](file://backend/services/help_bot_content.py#L1-L255)
-- [slice_runner.py:1-745](file://backend/slice_runner.py#L1-L745)
+- [dispatch_service.py:1-786](file://backend/services/dispatch_service.py#L1-L786)
 
 ## Core Components
 The system consists of several interconnected components working together to provide reliable emergency guidance:
@@ -97,11 +104,12 @@ Intelligent mapping of incident flags to specialized medical protocols:
 - **Fracture/Crush**: Immobilization, wound covering, splinting techniques
 - **Snakebite**: Stillness maintenance, constriction removal, harmful remedy prevention
 
-### Audio Pipeline
-Real-time voice processing with emergency-optimized features:
-- **VAD-based Capture**: Adaptive noise floor calibration and speech detection
-- **Barge-in Detection**: Interruptible playback with echo tolerance
-- **Fail-safe Playback**: Guaranteed audio continuity even during service failures
+### Enhanced Incident Tracking System
+New Module 8 & 9 integration providing comprehensive audit trails:
+- **Mid-Incident Escalation Tracking**: `mid_incident_escalated` flag with timestamp
+- **Dispatch Event Logging**: Complete audit trail of all escalation events
+- **Real-time Store Synchronization**: Live updates to INCIDENT_STORE
+- **Coverage Gap Detection**: Village availability monitoring and reporting
 
 **Section sources**
 - [help_bot_service.py:663-960](file://backend/services/help_bot_service.py#L663-L960)
@@ -111,7 +119,7 @@ Real-time voice processing with emergency-optimized features:
 - [help_bot_content.py:46-255](file://backend/services/help_bot_content.py#L46-L255)
 
 ## Architecture Overview
-The help bot implements a robust conversation flow optimized for emergency scenarios:
+The help bot implements a robust conversation flow optimized for emergency scenarios with enhanced incident tracking:
 
 ```mermaid
 sequenceDiagram
@@ -122,6 +130,7 @@ participant STT as "Transcriber"
 participant INT as "Intent Classifier"
 participant TTS as "TTS + Cache"
 participant ESC as "Escalation Hook"
+participant DIS as "Dispatch Service"
 R->>M : Speak (Urdu)
 M-->>S : wav_bytes (VAD chunked)
 S->>STT : transcribe(wav_bytes)
@@ -142,6 +151,8 @@ TTS-->>S : wav_path
 S->>R : Play audio
 else escalation
 S->>ESC : escalateIncident(new_signals)
+ESC->>DIS : handleEscalation(snapshot)
+DIS-->>ESC : updated incident
 ESC-->>S : updated incident
 S->>TTS : speak escalated guidance
 TTS-->>S : wav_path
@@ -155,6 +166,7 @@ end
 - [help_bot_service.py:274-289](file://backend/services/help_bot_service.py#L274-L289)
 - [help_bot_service.py:368-388](file://backend/services/help_bot_service.py#L368-L388)
 - [help_bot_service.py:576-648](file://backend/services/help_bot_service.py#L576-L648)
+- [dispatch_service.py:622-786](file://backend/services/dispatch_service.py#L622-L786)
 
 ## Detailed Component Analysis
 
@@ -180,7 +192,7 @@ escalated_monitor --> session_finalized : "session_finalized"
 - [help_bot_service.py:929-959](file://backend/services/help_bot_service.py#L929-959)
 
 **Section sources**
-- [help_bot_service.py:663-960](file://backend/services/help_bot_service.py#L663-960)
+- [help_bot_service.py:663-960](file://backend/services/help_bot_service.py#L663-L960)
 
 ### Voice Activity Detection and Barge-In
 Advanced audio processing optimized for emergency environments:
@@ -198,7 +210,7 @@ Silence --> |Yes| End(["Return wav bytes"])
 ```
 
 **Diagram sources**
-- [help_bot_service.py:498-519](file://backend/services/help_bot_service.py#L498-519)
+- [help_bot_service.py:498-519](file://backend/services/help_bot_service.py#L498-L519)
 - [help_bot_service.py:521-569](file://backend/services/help_bot_service.py#L521-569)
 - [help_bot_service.py:405-444](file://backend/services/help_bot_service.py#L405-444)
 
@@ -221,7 +233,7 @@ Unclear --> Return
 ```
 
 **Diagram sources**
-- [help_bot_service.py:174-214](file://backend/services/help_bot_service.py#L174-214)
+- [help_bot_service.py:174-214](file://backend/services/help_bot_service.py#L174-L214)
 - [help_bot_service.py:216-241](file://backend/services/help_bot_service.py#L216-241)
 - [help_bot_service.py:244-289](file://backend/services/help_bot_service.py#L244-289)
 - [slice_runner.py:72-95](file://backend/slice_runner.py#L72-95)
@@ -407,10 +419,12 @@ Comprehensive audio caching system for reliability and performance:
 - Handles retries with exponential backoff
 - Skips already cached entries automatically
 
+**Updated** The TTS cache has expanded from 78 to 230 entries, covering all 39 scripted Urdu lines across all three injury branches. The cache includes shared lines (failsafe, out-of-scope, check-in, session-complete) plus branch-specific content for heavy bleeding, fracture/crush, and snakebite protocols.
+
 **Section sources**
-- [help_bot_service.py:350-388](file://backend/services/help_bot_service.py#L350-388)
+- [help_bot_service.py:350-388](file://backend/services/help_bot_service.py#L350-L388)
 - [help_bot_runner.py:102-133](file://backend/help_bot_runner.py#L102-L133)
-- [manifest.json:1-152](file://mockdata/helpbot/tts_cache/manifest.json#L1-L152)
+- [manifest.json:1-230](file://mockdata/helpbot/tts_cache/manifest.json#L1-L230)
 
 ### Audio Quality Verification
 Built-in verification system for ensuring Urdu audio quality:
@@ -427,13 +441,15 @@ Built-in verification system for ensuring Urdu audio quality:
 - Audio file path for manual verification
 - Branch-specific coverage reporting
 
+**Updated** Round-trip STT verification completed successfully across all three injury branches, confirming high-quality Urdu audio generation and accurate transcription recognition.
+
 **Section sources**
 - [help_bot_runner.py:135-172](file://backend/help_bot_runner.py#L135-L172)
 
 ## Escalation and Incident Management
 
-### Escalation Hook System
-Centralized escalation management with full audit trail:
+### Enhanced Escalation Hook System
+Centralized escalation management with comprehensive audit trail:
 
 **Severity Tier Management:**
 - Only upgrades, never downgrades severity
@@ -453,11 +469,13 @@ Centralized escalation management with full audit trail:
 - Transcript excerpts for audit purposes
 - Integration with main incident store
 
+**Updated** Enhanced with Module 8 & 9 telemetry including `mid_incident_escalated` flag and comprehensive dispatch event logging for complete audit trail.
+
 **Section sources**
 - [help_bot_service.py:576-648](file://backend/services/help_bot_service.py#L576-648)
 
-### Incident Store Integration
-Seamless integration with main triage system:
+### Enhanced Incident Store Integration
+Seamless integration with main triage system with real-time updates:
 
 **Active Incident Tracking:**
 - Real-time incident object updates
@@ -471,8 +489,15 @@ Seamless integration with main triage system:
 - Responder assignment coordination
 - Status synchronization across systems
 
+**Module 8 & 9 Integration:**
+- Mid-incident escalation tracking with timestamps
+- Coverage gap detection and reporting
+- Localized reporter updates in Urdu
+- PostgreSQL persistence and rehydration support
+
 **Section sources**
 - [help_bot_service.py:576-648](file://backend/services/help_bot_service.py#L576-648)
+- [dispatch_service.py:622-786](file://backend/services/dispatch_service.py#L622-L786)
 - [slice_runner.py:170-188](file://backend/slice_runner.py#L170-188)
 
 ## Integration with Main Triage System
@@ -510,11 +535,94 @@ Comprehensive testing infrastructure for validation:
 - Environment variable configuration
 - Automated test scenario execution
 
+**Updated** Comprehensive test runs completed across all three injury branches with detailed replay scripts demonstrating real-world usage patterns, including escalation scenarios and edge case handling. Enhanced with Module 8 & 9 test coverage for incident tracking and escalation auditing.
+
 **Section sources**
-- [help_bot_runner.py:74-99](file://backend/help_bot_runner.py#L74-L99)
+- [help_bot_runner.py:74-99](file://backend/help_bot_runner.py#L74-99)
 - [heavy_bleeding.json:1-11](file://mockdata/helpbot/scripts/heavy_bleeding.json#L1-L11)
 - [fracture_crush.json:1-11](file://mockdata/helpbot/scripts/fracture_crush.json#L1-L11)
 - [snakebite.json:1-11](file://mockdata/helpbot/scripts/snakebite.json#L1-L11)
+
+## Module 8 & 9 Enhanced Features
+
+### Mid-Incident Escalation Tracking
+Comprehensive audit trail for help-bot initiated escalations:
+
+**Escalation Flow:**
+1. Help bot detects worsening condition via intent classification
+2. `escalateIncident()` called with new signals and suggested tier
+3. Severity tier upgraded (never downgraded)
+4. `mid_incident_escalated` flag set to True
+5. Dispatch event logged with trigger details
+6. Module 3 `handleEscalation()` triggered for dispatch actions
+7. Real-time INCIDENT_STORE synchronization
+
+**Audit Trail Components:**
+- Timestamped escalation events in `help_bot_transitions`
+- Dispatch events in `dispatch_events` array
+- Trigger phrases and transcript excerpts
+- Severity tier change documentation
+- Ambulance request status tracking
+
+**Section sources**
+- [help_bot_service.py:579-661](file://backend/services/help_bot_service.py#L579-L661)
+- [dispatch_service.py:622-786](file://backend/services/dispatch_service.py#L622-L786)
+- [test_module8_9.py:125-185](file://backend/test_module8_9.py#L125-L185)
+
+### Coverage Gap Detection and Reporting
+Module 8 feature for village availability monitoring:
+
+**Detection Logic:**
+- Monitors responder availability across villages
+- Identifies when all candidates are exhausted/unavailable
+- Sets `coverage_gap` flag to True
+- Logs coverage gap events in dispatch events
+
+**Reporting Features:**
+- Village-specific gap detection
+- Reason categorization (candidates_exhausted_or_unavailable)
+- Integration with dispatch service for automatic escalation
+- Audit trail for coverage analysis
+
+**Section sources**
+- [test_module8_9.py:76-123](file://backend/test_module8_9.py#L76-L123)
+
+### Localized Reporter Updates
+Module 9 feature for Urdu timeline updates:
+
+**Timeline Stages:**
+- reported → responder_notified → responder_en_route → responder_arrived → closed
+- Each stage includes localized Urdu message
+- Sequential accumulation throughout incident lifecycle
+- PostgreSQL persistence and HTTP endpoint access
+
+**Update Mechanism:**
+- Automatic stage progression based on incident events
+- Urdu message generation for each stage
+- Timestamp tracking for each update
+- Real-time HTTP API access for timeline polling
+
+**Section sources**
+- [test_module8_9.py:187-267](file://backend/test_module8_9.py#L187-L267)
+
+### PostgreSQL Persistence and Rehydration
+Module 9 feature for data durability:
+
+**Persistence Features:**
+- All incident changes written to PostgreSQL
+- Coverage gap flags persisted
+- Mid-incident escalation flags tracked
+- Responder arrival timestamps stored
+- Reporter updates list maintained
+
+**Rehydration Support:**
+- Store rehydration from database on restart
+- Complete incident state restoration
+- Timeline reconstruction from persistent data
+- HTTP endpoint availability after restart
+
+**Section sources**
+- [test_module8_9.py:269-349](file://backend/test_module8_9.py#L269-L349)
 
 ## Performance Considerations
 
@@ -538,6 +646,12 @@ System designed for optimal performance in emergency scenarios:
 - Retry logic with exponential backoff
 - Circuit breaker patterns for service failures
 - Stateless design enabling horizontal scaling
+
+**Enhanced Performance Features:**
+- Real-time incident store synchronization
+- Efficient dispatch event logging
+- Optimized escalation processing pipeline
+- Database connection pooling for persistence
 
 ## Troubleshooting Guide
 
@@ -567,6 +681,14 @@ System designed for optimal performance in emergency scenarios:
 - Manifest tracking helps identify rendering issues
 - Failsafe audio ensures continuity even during quota limits
 
+**Enhanced Troubleshooting for Modules 8 & 9:**
+- Check `mid_incident_escalated` flag for escalation tracking
+- Review `dispatch_events` array for complete audit trail
+- Verify PostgreSQL connectivity for persistence features
+- Monitor coverage gap detection for village availability issues
+
+**Updated** Real-world testing revealed quota exhaustion scenarios where TTS services returned RESOURCE_EXHAUSTED errors. The system's fail-safe mechanism successfully handled these cases by playing pre-rendered audio, maintaining conversation continuity even when live synthesis was unavailable. Enhanced testing confirms proper escalation tracking and dispatch event logging for Modules 8 & 9 features.
+
 ### Operational Tips
 
 **Testing and Validation:**
@@ -574,17 +696,19 @@ System designed for optimal performance in emergency scenarios:
 - Use verify-tts to check spoken-Urdu quality and STT accuracy
 - Inspect test run records for latencies, expectations, and transitions
 - Monitor manifest.json for cache effectiveness
+- Execute Module 8 & 9 test suite for comprehensive validation
 
 **Production Deployment:**
 - Configure appropriate timeout values for network operations
 - Set up proper logging for troubleshooting and monitoring
 - Implement health checks for audio device availability
 - Plan for graceful degradation in production environments
+- Ensure PostgreSQL connectivity for persistence features
 
 **Section sources**
 - [help_bot_service.py:159-168](file://backend/services/help_bot_service.py#L159-L168)
-- [help_bot_service.py:274-289](file://backend/services/help_bot_service.py#L274-289)
-- [help_bot_service.py:498-519](file://backend/services/help_bot_service.py#L498-519)
+- [help_bot_service.py:274-289](file://backend/services/help_bot_service.py#L274-L289)
+- [help_bot_service.py:498-519](file://backend/services/help_bot_service.py#L498-L519)
 - [help_bot_runner.py:102-172](file://backend/help_bot_runner.py#L102-L172)
 
 ## Conclusion
@@ -606,10 +730,19 @@ Key achievements include:
 - Fail-safe operations ensuring continuity during service failures
 
 **Operational Reliability:**
-- Comprehensive TTS caching with manifest tracking
+- Comprehensive TTS caching with manifest tracking (230 cached entries)
 - Graceful degradation when services are unavailable
 - Extensive testing framework with replay and simulation modes
 - Integration with main triage system for coordinated response
+
+**Enhanced Incident Tracking (Modules 8 & 9):**
+- Mid-incident escalation tracking with comprehensive audit trails
+- Coverage gap detection and reporting for village availability
+- Localized reporter updates in Urdu throughout incident lifecycle
+- PostgreSQL persistence with rehydration support
+- Complete dispatch event logging for emergency response analysis
+
+**Updated** Enhanced integration with Modules 8 & 9 features provides comprehensive incident tracking, mid-incident escalation auditing, and improved dispatch event logging. The system now supports complete emergency response lifecycle management with real-time store synchronization, coverage gap detection, and localized reporter updates.
 
 The system's design prioritizes safety, reliability, and ease of use in high-stress emergency scenarios. By keeping all medical content hardcoded while leveraging AI for ears (speech recognition) and routing (intent classification), the bot maintains strict control over medical advice while providing intelligent, context-aware assistance to first responders.
 

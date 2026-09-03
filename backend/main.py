@@ -64,6 +64,7 @@ from dotenv import load_dotenv  # noqa: E402
 load_dotenv()
 
 from fastapi import FastAPI                       # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.staticfiles import StaticFiles        # noqa: E402
 
 import slice_runner                                # noqa: E402
@@ -73,6 +74,20 @@ from services import incident_lifecycle_service as lifecycle  # noqa: E402
 
 APP_TITLE = "LifeLine Ride — Village Emergency Response Network"
 APP_VERSION = "1.0.0"
+
+# Browser origins allowed to drive the cockpit dashboard. The Vite dev server
+# is the primary consumer; the list is env-overridable so a deployed frontend
+# can be whitelisted without a code change. Same fail-safe discipline as the
+# rest of the bootstrap: a missing/blank value falls back to localhost only,
+# never to "*" with credentials.
+_DEFAULT_ORIGINS = (
+    "http://localhost:5173,http://127.0.0.1:5173,"
+    "http://localhost:4173,http://127.0.0.1:4173"
+)
+CORS_ORIGINS = [
+    o.strip() for o in os.getenv("CORS_ORIGINS", _DEFAULT_ORIGINS).split(",")
+    if o.strip()
+]
 
 
 def _log(msg: str) -> None:
@@ -231,6 +246,17 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title=APP_TITLE, version=APP_VERSION, lifespan=lifespan)
 
+# CORS must be installed BEFORE the router so preflights (OPTIONS) on every
+# /api/v1 route are answered. Without it the browser blocks the cockpit's
+# form-encoded report POST and every JSON call.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
+)
+
 # Project error contract: EVERY error body is {"code": <string>, "message": ...}
 emergency.install_error_handlers(app)
 
@@ -257,6 +283,7 @@ def health() -> dict:
         "responders_loaded": len(slice_runner.SEED_RESPONDERS),
         "incidents_in_memory": len(slice_runner.INCIDENT_STORE),
         "helpbot_sessions": len(emergency._HELPBOT_SESSIONS),
+        "cors_origins": CORS_ORIGINS,
     }
 
 

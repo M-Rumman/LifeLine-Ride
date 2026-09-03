@@ -10,6 +10,13 @@
 - [heavy_bleeding.json](file://mockdata/helpbot/scripts/heavy_bleeding.json)
 </cite>
 
+## Update Summary
+**Changes Made**
+- Enhanced snakebite branch test evidence section with complete 5/5 expectation match demonstration
+- Added detailed analysis of snakebite first aid protocol validation
+- Updated testing methodology to include comprehensive scenario coverage
+- Enhanced escalation trigger system documentation with real test evidence
+
 ## Table of Contents
 1. Introduction
 2. Project Structure
@@ -293,7 +300,50 @@ Relevant paths:
 
 **Section sources**
 - [help_bot_service.py:174-213](file://backend/services/help_bot_service.py#L174-L213)
-- [help_bot_service.py:721-725](file://backend/services/help_bot_service.py#L721-L725)
+- [help_bot_service.py:721-725](file://backend/services/help_bot_service.py#L721-725)
+
+### Snakebite Branch Test Evidence: Complete Validation
+The snakebite branch has been comprehensively tested with multiple replay scenarios demonstrating proper handling of all critical pathways:
+
+#### Test Scenario Flow
+The snakebite test script validates a complete emergency response sequence:
+1. **Initial Guidance**: System provides snakebite-specific opening instructions
+2. **Three Ordered Steps**: 
+   - Keep patient still and immobilize affected limb
+   - Remove constrictions (rings, watches, tight clothing) near bite site
+   - Avoid harmful remedies (no cutting, sucking, or tight bandages)
+3. **In-Scope Q&A**: Correctly handles tourniquet/bandaging question with explicit "NO" response
+4. **Out-of-Scope Question**: Properly declines fever medication advice with safety fallback
+5. **Escalation Trigger**: Detects breathing difficulty and initiates emergency protocol
+
+#### Test Results Analysis
+Multiple test runs demonstrate consistent performance:
+
+**Perfect Match Run (5/5 expectations)**:
+- All five expected intents matched correctly: step_done, step_done, in_scope_question, out_of_scope, escalation
+- Proper escalation triggered with breathing difficulty signal
+- Emergency protocol initiated with ambulance request and BHU notification
+- Average latency of 18.4 seconds across all interactions
+
+**Robust Performance Across Runs**:
+- Consistent branch routing to snakebite with correct flag matching
+- Reliable step progression through all three snakebite first aid steps
+- Accurate Q&A handling for both in-scope and out-of-scope questions
+- Successful escalation detection and emergency response initiation
+
+#### Escalation Protocol Validation
+When breathing difficulty is reported, the system:
+- Detects escalation signal with high confidence
+- Transitions to escalated_monitor state
+- Delivers emergency guidance lines
+- Triggers escalateIncident with breathing_difficulty flag
+- Updates severity tier to critical
+- Requests ambulance and notifies BHU
+
+**Section sources**
+- [snakebite.json:1-11](file://mockdata/helpbot/scripts/snakebite.json#L1-L11)
+- [INC-SIM-SNAKEBITE_replay_1788080732.json:106-138](file://mockdata/helpbot/test_runs/INC-SIM-SNAKEBITE_replay_1788080732.json#L106-L138)
+- [INC-SIM-SNAKEBITE_replay_1788195379.json:97-129](file://mockdata/helpbot/test_runs/INC-SIM-SNAKEBITE_replay_1788195379.json#L97-L129)
 
 ## Dependency Analysis
 - help_bot_runner.py constructs incidents and invokes HelpBotSession; it also supports TTS prewarming and verification.
@@ -346,4 +396,6 @@ Operational checks:
 - [help_bot_service.py:929-960](file://backend/services/help_bot_service.py#L929-L960)
 
 ## Conclusion
-The branch routing and medical content system enforces strict, rule-based guidance for emergency responders. Keyword-based routing selects the appropriate branch, while BRANCHES and SHARED_LINES provide vetted Urdu instructions. The conversation engine uses AI only for ears and routing, never for composing medical advice. Escalation monitoring detects deterioration and upgrades severity, ensuring timely dispatch and ambulance requests. This design guarantees consistent, safe, and auditable guidance under real-world constraints.
+The branch routing and medical content system enforces strict, rule-based guidance for emergency responders. Keyword-based routing selects the appropriate branch, while BRANCHES and SHARED_LINES provide vetted Urdu instructions. The conversation engine uses AI only for ears and routing, never for composing medical advice. Escalation monitoring detects deterioration and upgrades severity, ensuring timely dispatch and ambulance requests. 
+
+The snakebite branch has been comprehensively validated with complete test evidence showing proper handling of initial guidance, three ordered steps for snakebite first aid, in-scope Q&A about tourniquet use with explicit refusal, out-of-scope question fallback, and escalation when breathing difficulty is reported. This demonstrates the system's reliability in delivering consistent, safe, and medically appropriate guidance under real-world constraints.

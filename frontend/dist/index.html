@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#16165c" />
+    <meta
+      name="description"
+      content="LifeLine Ride — Urdu-first village emergency response and dispatch cockpit"
+    />
+    <title>LifeLine Ride — Emergency Cockpit</title>
+
+    <!--
+      Urdu-first typography. Naskh is used for dashboard body text (legible at
+      small sizes); Nastaliq is reserved for large display headings. Both load
+      with display=swap so the cockpit renders instantly on a slow venue link
+      and falls back to system Urdu fonts when offline.
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@400;500;600;700&family=Noto+Nastaliq+Urdu:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Leaflet marker sprites are bundled from node_modules by the CSS import
+         in src/index.css, so no CDN stylesheet is needed here. -->
+    <script type="module" crossorigin src="/assets/index-DCS5ft41.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-BMvQ1tn7.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

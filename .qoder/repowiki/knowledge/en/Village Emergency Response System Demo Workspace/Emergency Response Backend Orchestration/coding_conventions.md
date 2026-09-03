@@ -1,5 +1,0 @@
-- Cross-module data exchange uses Pydantic `BaseModel` classes defined in `slice_runner.py` (`Incident`, `Responder`, `BHU`, `DispatchResult`, `GPSLocation`) rather than raw dicts.
-- AI provider selection is driven by environment variables (`TRIAGE_AI_PROVIDER`, `GEMINI_*_MODEL`, `DASHSCOPE_*_MODEL`) so switching providers requires no code changes.
-- API keys are loaded from the repository-root `.env` via `dotenv.load_dotenv` and never hard-coded or logged inside the backend.
-- Each AI step exposes paired `gemini_*` / `dashscope_*` implementations dispatched through a single public wrapper that falls back to `FAILED_SIGNAL` on error.
-- Deterministic testing uses cached results: triage outputs are memoized under `mockdata/media/.triage_cache` keyed by photo+voice hash, and TTS audio is prewarmed into a per-line cache to avoid quota usage during replay.

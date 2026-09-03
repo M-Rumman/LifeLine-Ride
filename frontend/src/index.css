@@ -1,0 +1,260 @@
+@import 'leaflet/dist/leaflet.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==========================================================================
+   Impilo Clinical Observatory — base layer
+   Canvas is Deep Iris edge-to-edge. Never neutral black or gray.
+   ========================================================================== */
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-iris-canvas text-pearl font-gilroy antialiased;
+    /* Subtle clinical depth without introducing gray or black. */
+    background-image:
+      radial-gradient(
+        1100px 620px at 12% -8%,
+        rgba(83, 80, 204, 0.42) 0%,
+        rgba(22, 22, 92, 0) 62%
+      ),
+      radial-gradient(
+        900px 560px at 96% 4%,
+        rgba(0, 177, 255, 0.14) 0%,
+        rgba(22, 22, 92, 0) 58%
+      );
+    background-attachment: fixed;
+  }
+
+  /* Urdu runs are RTL; the shell stays LTR so metrics and tables align. */
+  [dir='rtl'] {
+    @apply font-urdu;
+    line-height: 2;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-semibold tracking-tight;
+  }
+
+  ::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+  ::-webkit-scrollbar-track {
+    background: rgba(22, 22, 92, 0.6);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #4846c6;
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #5350cc;
+  }
+
+  :focus-visible {
+    outline: 2px solid #00b1ff;
+    outline-offset: 2px;
+  }
+}
+
+/* ==========================================================================
+   Components — pill geometry everywhere, card radii 24/32px
+   ========================================================================== */
+
+@layer components {
+  .card {
+    @apply bg-iris-shadow border border-iris-border rounded-card shadow-panel;
+  }
+
+  .card-panel {
+    @apply bg-iris-shadow border border-iris-border rounded-panel shadow-panel;
+  }
+
+  /* Every button, tag and tab is rounded-full per the design system. */
+  .pill {
+    @apply inline-flex items-center justify-center gap-2 rounded-full
+           font-medium transition-all duration-150 select-none
+           disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:translate-y-0;
+  }
+
+  .pill-primary {
+    @apply pill bg-iris-pulse text-pearl border border-iris-glow
+           hover:bg-iris-glow hover:-translate-y-px active:translate-y-0;
+  }
+
+  .pill-cyan {
+    @apply pill bg-clinical-cyan/15 text-clinical-cyan border border-clinical-cyan/55
+           hover:bg-clinical-cyan/25 hover:-translate-y-px active:translate-y-0;
+  }
+
+  .pill-mint {
+    @apply pill bg-mint-vital/15 text-mint-vital border border-mint-vital/55
+           hover:bg-mint-vital/25 hover:-translate-y-px active:translate-y-0;
+  }
+
+  .pill-danger {
+    @apply pill bg-tier-critical/15 text-tier-critical border border-tier-critical/55
+           hover:bg-tier-critical/25 hover:-translate-y-px active:translate-y-0;
+  }
+
+  .pill-ghost {
+    @apply pill bg-transparent text-ash border border-iris-border
+           hover:text-pearl hover:border-iris-glow hover:bg-iris-pulse/25;
+  }
+
+  .tag {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1
+           text-[11px] font-medium tracking-wide uppercase border;
+  }
+
+  .field {
+    @apply w-full rounded-full bg-iris-canvas/70 border border-iris-border
+           px-4 py-2.5 text-sm text-pearl placeholder:text-ash/60
+           focus:border-clinical-cyan focus:outline-none transition-colors;
+  }
+
+  /* Native select arrow recoloured for the iris canvas. */
+  .field-select {
+    @apply field appearance-none pr-9 cursor-pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%2300b1ff'%3E%3Cpath d='M5.5 7.5 10 12l4.5-4.5z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.6rem center;
+    background-size: 1.15rem;
+  }
+
+  .field-select option {
+    background-color: #232269;
+    color: #f2f2ff;
+  }
+
+  .label {
+    @apply block text-[11px] font-medium uppercase tracking-wider text-ash mb-1.5;
+  }
+
+  .metric-value {
+    @apply text-2xl font-semibold tracking-tighter text-clinical-cyan tabular-nums;
+  }
+}
+
+/* ==========================================================================
+   Utilities
+   ========================================================================== */
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Audio wave indicator beside the help-bot player. */
+  .wave-bar {
+    @apply w-[3px] rounded-full bg-clinical-cyan origin-center;
+    animation: wave-bar 1s ease-in-out infinite;
+  }
+
+  .hairline-top {
+    border-top: 1px solid #4846c6;
+  }
+}
+
+/* ==========================================================================
+   Leaflet — reskinned onto the iris canvas
+   ========================================================================== */
+
+.leaflet-container {
+  background: #16165c;
+  font-family: inherit;
+  border-radius: 24px;
+}
+
+/* Dim the OSM basemap so clinical accents stay the brightest thing on screen. */
+.leaflet-tile-pane {
+  filter: brightness(0.62) contrast(1.12) saturate(0.5) hue-rotate(196deg);
+}
+
+.leaflet-control-attribution {
+  background: rgba(22, 22, 92, 0.82) !important;
+  color: #a9a9d4 !important;
+  font-size: 9px !important;
+  border-radius: 9999px 0 0 0;
+}
+.leaflet-control-attribution a {
+  color: #00b1ff !important;
+}
+
+.leaflet-bar a,
+.leaflet-bar a:hover {
+  background: #232269 !important;
+  color: #f2f2ff !important;
+  border-bottom-color: #4846c6 !important;
+}
+
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: #232269 !important;
+  color: #f2f2ff !important;
+  border: 1px solid #4846c6;
+  box-shadow: 0 18px 40px -18px rgba(9, 9, 46, 0.9) !important;
+}
+.leaflet-popup-content-wrapper {
+  border-radius: 18px !important;
+}
+.leaflet-popup-content {
+  margin: 10px 14px !important;
+  font-size: 12px !important;
+  line-height: 1.5 !important;
+}
+.leaflet-popup-close-button {
+  color: #a9a9d4 !important;
+}
+
+/* Marker halos — clinical cyan for live actors, mint for verified/complete. */
+.ll-marker {
+  border-radius: 9999px;
+  border: 2px solid rgba(242, 242, 255, 0.9);
+  box-shadow: 0 0 0 4px rgba(22, 22, 92, 0.55);
+}
+.ll-marker--reporter {
+  background: #ff4d6d;
+}
+.ll-marker--responder {
+  background: #00b1ff;
+}
+.ll-marker--bhu {
+  background: #00ffaa;
+}
+.ll-marker--idle {
+  background: #5350cc;
+  opacity: 0.72;
+}
+
+/* Animated route vectors. Defined here rather than via a Tailwind animation
+   utility because Leaflet injects these <path> elements itself — the keyframes
+   must exist in the stylesheet unconditionally. */
+@keyframes ll-route-flow {
+  to {
+    stroke-dashoffset: -28;
+  }
+}
+
+.route-vector {
+  stroke-dasharray: 10 18;
+  animation: ll-route-flow 1s linear infinite;
+}
+
+.route-vector--static {
+  stroke-dasharray: 6 10;
+  opacity: 0.55;
+}

@@ -1,0 +1,1 @@
+Top-level workspace that wires a FastAPI triage/dispatch backend against Urdu help-bot simulation fixtures to demonstrate an end-to-end rural emergency response system across Modules 1–9.

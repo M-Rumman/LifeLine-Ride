@@ -1,1 +1,0 @@
-Python with Pydantic `BaseModel` classes as the cross-module contract; Google GenAI (Gemini) as the default AI provider with DashScope as an alternative selected via environment variables; dotenv loading API keys from the repository-root `.env`.

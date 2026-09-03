@@ -50,7 +50,10 @@ from services.dispatch_service import (  # noqa: E402
     dispatchIncident,
 )
 from services.incident_lifecycle_service import closeIncident  # noqa: E402
-from models.incident_model import truncate_incidents_table  # noqa: E402
+from models.incident_model import (  # noqa: E402
+    truncate_incidents_table,
+    upsert_incident_to_db,
+)
 from models.responder_model import (  # noqa: E402
     get_responder_from_db,
     seed_responders_from_contract,
@@ -166,7 +169,8 @@ def _dispatch_and_log(incident: slice_runner.Incident):
             "no_resources":       "no_responders_available",
         }[decision.status],
     )
-    slice_runner.logIncident(incident, result)
+    record = slice_runner.logIncident(incident, result)
+    upsert_incident_to_db(record)
     return decision
 
 

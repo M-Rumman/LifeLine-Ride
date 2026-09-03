@@ -1,6 +1,0 @@
-- Every responder-facing utterance is sourced exclusively from `help_bot_content.py` (`BRANCHES`/`SHARED_LINES`); the service layer never constructs medical text at runtime.
-- Provider boundaries expose paired Gemini and DashScope functions (`gemini_*` / `dashscope_*`) selected at call time via `slice_runner._ai_provider()`, so switching providers requires no caller changes.
-- All provider calls go through `slice_runner._call_with_retry` with a shared timeout and quota retry, and failures fall back to a pre-rendered Urdu fail-safe line rather than silence.
-- Conversation state transitions are recorded via `_transition()` which appends timestamped entries to `incident.help_bot_transitions` and syncs them to `INCIDENT_STORE`, keeping audit logs in sync with live session state.
-- Audio I/O dependencies (`sounddevice`, `numpy`, `soundfile`) are imported lazily inside functions so replay/headless modes run without hardware, raising only when actually needed.
-- Escalation paths funnel through the single `escalateIncident(incident_id, new_signals)` function, which upgrades tier, merges flags, marks BHU/ambulance, and logs the event — the designated integration point for future Modules 3/8.
