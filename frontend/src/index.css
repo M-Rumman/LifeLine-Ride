@@ -76,11 +76,11 @@
 
 @layer components {
   .card {
-    @apply bg-iris-shadow border border-iris-border rounded-card shadow-panel;
+    @apply bg-white text-slate-800 border border-slate-200 rounded-card shadow-panel;
   }
 
   .card-panel {
-    @apply bg-iris-shadow border border-iris-border rounded-panel shadow-panel;
+    @apply bg-white text-slate-800 border border-slate-200 rounded-panel shadow-panel;
   }
 
   /* Every button, tag and tab is rounded-full per the design system. */
@@ -91,42 +91,42 @@
   }
 
   .pill-primary {
-    @apply pill bg-iris-pulse text-pearl border border-iris-glow
-           hover:bg-iris-glow hover:-translate-y-px active:translate-y-0;
+    @apply pill bg-iris-pulse text-white border border-iris-glow
+           hover:bg-iris-glow hover:-translate-y-px active:translate-y-0 shadow-sm;
   }
 
   .pill-cyan {
-    @apply pill bg-clinical-cyan/15 text-clinical-cyan border border-clinical-cyan/55
+    @apply pill bg-clinical-cyan/15 text-sky-700 border border-clinical-cyan/40
            hover:bg-clinical-cyan/25 hover:-translate-y-px active:translate-y-0;
   }
 
   .pill-mint {
-    @apply pill bg-mint-vital/15 text-mint-vital border border-mint-vital/55
-           hover:bg-mint-vital/25 hover:-translate-y-px active:translate-y-0;
+    @apply pill bg-emerald-50 text-emerald-700 border border-emerald-300
+           hover:bg-emerald-100 hover:-translate-y-px active:translate-y-0;
   }
 
   .pill-danger {
-    @apply pill bg-tier-critical/15 text-tier-critical border border-tier-critical/55
-           hover:bg-tier-critical/25 hover:-translate-y-px active:translate-y-0;
+    @apply pill bg-rose-50 text-rose-700 border border-rose-300
+           hover:bg-rose-100 hover:-translate-y-px active:translate-y-0;
   }
 
   .pill-ghost {
-    @apply pill bg-transparent text-ash border border-iris-border
-           hover:text-pearl hover:border-iris-glow hover:bg-iris-pulse/25;
+    @apply pill bg-slate-100 text-slate-700 border border-slate-200
+           hover:text-slate-900 hover:border-slate-300 hover:bg-slate-200/70;
   }
 
   .tag {
     @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1
-           text-[11px] font-medium tracking-wide uppercase border;
+           text-[11px] font-semibold tracking-wide uppercase border;
   }
 
   .field {
-    @apply w-full rounded-full bg-iris-canvas/70 border border-iris-border
-           px-4 py-2.5 text-sm text-pearl placeholder:text-ash/60
-           focus:border-clinical-cyan focus:outline-none transition-colors;
+    @apply w-full rounded-full bg-slate-50 border border-slate-200
+           px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400
+           focus:border-clinical-cyan focus:bg-white focus:outline-none transition-colors;
   }
 
-  /* Native select arrow recoloured for the iris canvas. */
+  /* Native select arrow recoloured for clean light cards. */
   .field-select {
     @apply field appearance-none pr-9 cursor-pointer;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%2300b1ff'%3E%3Cpath d='M5.5 7.5 10 12l4.5-4.5z'/%3E%3C/svg%3E");
@@ -136,16 +136,16 @@
   }
 
   .field-select option {
-    background-color: #232269;
-    color: #f2f2ff;
+    background-color: #ffffff;
+    color: #1e293b;
   }
 
   .label {
-    @apply block text-[11px] font-medium uppercase tracking-wider text-ash mb-1.5;
+    @apply block text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5;
   }
 
   .metric-value {
-    @apply text-2xl font-semibold tracking-tighter text-clinical-cyan tabular-nums;
+    @apply text-2xl font-bold tracking-tighter text-sky-600 tabular-nums;
   }
 }
 
@@ -165,7 +165,7 @@
   }
 
   .hairline-top {
-    border-top: 1px solid #4846c6;
+    border-top: 1px solid #e2e8f0;
   }
 }
 
@@ -176,7 +176,7 @@
 .leaflet-container {
   background: #16165c;
   font-family: inherit;
-  border-radius: 24px;
+  border-radius: 20px;
 }
 
 /* Dim the OSM basemap so clinical accents stay the brightest thing on screen. */
@@ -196,20 +196,20 @@
 
 .leaflet-bar a,
 .leaflet-bar a:hover {
-  background: #232269 !important;
-  color: #f2f2ff !important;
-  border-bottom-color: #4846c6 !important;
+  background: #ffffff !important;
+  color: #1e293b !important;
+  border-bottom-color: #e2e8f0 !important;
 }
 
 .leaflet-popup-content-wrapper,
 .leaflet-popup-tip {
-  background: #232269 !important;
-  color: #f2f2ff !important;
-  border: 1px solid #4846c6;
-  box-shadow: 0 18px 40px -18px rgba(9, 9, 46, 0.9) !important;
+  background: #ffffff !important;
+  color: #1e293b !important;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.25) !important;
 }
 .leaflet-popup-content-wrapper {
-  border-radius: 18px !important;
+  border-radius: 14px !important;
 }
 .leaflet-popup-content {
   margin: 10px 14px !important;
@@ -217,26 +217,29 @@
   line-height: 1.5 !important;
 }
 .leaflet-popup-close-button {
-  color: #a9a9d4 !important;
+  color: #64748b !important;
 }
 
 /* Marker halos — clinical cyan for live actors, mint for verified/complete. */
 .ll-marker {
   border-radius: 9999px;
-  border: 2px solid rgba(242, 242, 255, 0.9);
-  box-shadow: 0 0 0 4px rgba(22, 22, 92, 0.55);
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 0 3px rgba(22, 22, 92, 0.45);
 }
 .ll-marker--reporter {
-  background: #ff4d6d;
+  background: #e11d48;
 }
 .ll-marker--responder {
   background: #00b1ff;
 }
 .ll-marker--bhu {
-  background: #00ffaa;
+  background: #00c885;
+}
+.ll-marker--ambulance {
+  background: #f59e0b;
 }
 .ll-marker--idle {
-  background: #5350cc;
+  background: #818cf8;
   opacity: 0.72;
 }
 

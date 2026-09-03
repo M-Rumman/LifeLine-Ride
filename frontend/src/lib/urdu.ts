@@ -251,7 +251,7 @@ export const CONFIRMER_OPTIONS: {
     value: 'bhu_staff',
     label_en: 'BHU staff (verified)',
     label_ur: 'مرکزِ صحت عملہ (تصدیق شدہ)',
-    note: 'Counts toward Module 5 accountability metrics.',
+    note: 'Counts toward official accountability metrics.',
   },
   {
     value: 'responder',

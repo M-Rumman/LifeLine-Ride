@@ -29,17 +29,17 @@ const ROLE_HINT: Record<Role, string> = {
 }
 
 const TOAST_TONE: Record<ToastTone, string> = {
-  info: 'border-iris-glow bg-iris-shadow text-pearl',
-  success: 'border-mint-vital/55 bg-iris-shadow text-pearl',
-  error: 'border-tier-critical/55 bg-iris-shadow text-pearl',
-  critical: 'border-tier-critical/70 bg-iris-shadow text-pearl shadow-glow',
+  info: 'border-slate-200 bg-white text-slate-800 shadow-lg',
+  success: 'border-emerald-200 bg-white text-slate-800 shadow-lg',
+  error: 'border-rose-200 bg-white text-slate-800 shadow-lg',
+  critical: 'border-rose-300 bg-rose-50 text-rose-950 shadow-lg',
 }
 
 const TOAST_DOT: Record<ToastTone, string> = {
-  info: 'bg-iris-glow',
-  success: 'bg-mint-vital',
-  error: 'bg-tier-critical',
-  critical: 'bg-tier-critical animate-pulse-ring-critical',
+  info: 'bg-sky-500',
+  success: 'bg-emerald-500',
+  error: 'bg-rose-500',
+  critical: 'bg-rose-600',
 }
 
 export default function App() {
@@ -94,18 +94,18 @@ function RoleBanner({
   hint: string
 }) {
   return (
-    <div className="card-panel flex items-center gap-4 px-5 py-3.5">
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-clinical-cyan/55 bg-clinical-cyan/12 text-sm font-semibold text-clinical-cyan">
+    <div className="card-panel flex items-center gap-4 px-5 py-3.5 border border-slate-200">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-sky-300 bg-sky-50 text-sm font-bold text-sky-700">
         {step}
       </span>
       <div className="min-w-0">
-        <h2 className="truncate text-base font-semibold tracking-tighter text-pearl">
+        <h2 className="truncate text-base font-bold tracking-tight text-slate-900">
           {labelEn}
-          <span dir="rtl" className="ml-2 text-sm font-normal text-ash font-urdu">
+          <span dir="rtl" className="ml-2 text-sm font-normal text-slate-500 font-urdu">
             {labelUr}
           </span>
         </h2>
-        <p className="truncate text-xs text-ash/85">{hint}</p>
+        <p className="truncate text-xs text-slate-500">{hint}</p>
       </div>
     </div>
   )
@@ -144,16 +144,16 @@ function ToastStack() {
         >
           <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${TOAST_DOT[t.tone]}`} />
           <div className="min-w-0 flex-1">
-            <p className="text-[13px] font-semibold tracking-tight">{t.title}</p>
+            <p className="text-[13px] font-bold tracking-tight text-slate-900">{t.title}</p>
             {t.message && (
-              <p className="mt-0.5 text-[11px] leading-5 text-ash">{t.message}</p>
+              <p className="mt-0.5 text-[11px] leading-5 text-slate-600">{t.message}</p>
             )}
           </div>
           <button
             type="button"
             onClick={() => dismissToast(t.id)}
             aria-label="Dismiss notification"
-            className="shrink-0 rounded-full px-1.5 text-ash transition-colors hover:text-pearl"
+            className="shrink-0 rounded-full px-1.5 text-slate-400 transition-colors hover:text-slate-800"
           >
             ×
           </button>

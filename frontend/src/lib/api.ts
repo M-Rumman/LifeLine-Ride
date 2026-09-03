@@ -163,6 +163,7 @@ export interface ReportInput {
   reporter_id?: string
   photo_ref: string
   voice_ref: string
+  voice_transcript?: string
 }
 
 /**
@@ -177,6 +178,9 @@ export function reportEmergency(input: ReportInput): Promise<ReportResponse> {
   form.set('reporter_id', input.reporter_id ?? 'REP-USER-001')
   form.set('photo_ref', input.photo_ref)
   form.set('voice_ref', input.voice_ref)
+  if (input.voice_transcript) {
+    form.set('voice_transcript', input.voice_transcript)
+  }
 
   return request<ReportResponse>(`${API_V1}/emergency/report`, {
     method: 'POST',
@@ -301,6 +305,33 @@ export function verifyResponder(
     `${API_V1}/responders/${encodeURIComponent(responderId)}/verify`,
     'POST',
     params,
+  )
+}
+
+export function registerCandidateResponder(params: {
+  name: string
+  village: string
+  phone_number: string
+  linked_bhu_id: string
+  responder_id?: string
+  training_completed?: boolean
+  training_org?: string
+  equipment_checklist?: string[]
+}): Promise<Responder> {
+  return json<Responder>(`${API_V1}/responders/register`, 'POST', params)
+}
+
+export function clearPendingResponders(): Promise<{ status: string; cleared_count: number }> {
+  return request<{ status: string; cleared_count: number }>(
+    `${API_V1}/responders/pending/clear`,
+    { method: 'DELETE' },
+  )
+}
+
+export function deleteResponder(responderId: string): Promise<{ status: string; responder_id: string }> {
+  return request<{ status: string; responder_id: string }>(
+    `${API_V1}/responders/${encodeURIComponent(responderId)}`,
+    { method: 'DELETE' },
   )
 }
 

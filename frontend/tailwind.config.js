@@ -8,23 +8,27 @@ export default {
       colors: {
         // Core surfaces
         'iris-canvas': '#16165c', // viewport background, edge-to-edge
-        'iris-shadow': '#232269', // elevated cards & panels
-        'iris-border': '#4846c6', // 1px hairlines
+        'iris-shadow': '#ffffff', // elevated white cards & panels (palette surface inversion)
+        'iris-subtle': '#f8f9fc', // nested cards, inner info tiles, input backgrounds
+        'iris-border': '#e2e8f0', // soft neutral hairline borders
+        'iris-dark-border': '#393796', // header & dark component borders
         'iris-pulse': '#5350cc', // primary buttons, active tabs
         'iris-glow': '#6a67e0', // hover / emphasis
 
         // Clinical data accents
         'clinical-cyan': '#00b1ff', // live data, metrics, audio waves, routes
-        'mint-vital': '#00ffaa', // verified / success / completed
+        'mint-vital': '#00c885', // verified / success / completed (high contrast on white)
 
         // Severity scale
-        'tier-critical': '#ff4d6d',
-        'tier-moderate': '#00b1ff',
-        'tier-minor': '#c9c9e8',
+        'tier-critical': '#e11d48', // high contrast critical
+        'tier-moderate': '#0090d0',
+        'tier-minor': '#64748b',
 
-        // Neutral text on iris
-        pearl: '#f2f2ff',
-        ash: '#a9a9d4',
+        // High contrast text
+        'slate-dark': '#16165c', // primary text on white cards
+        'slate-muted': '#64748b', // labels / subtitles on white cards
+        pearl: '#f2f2ff', // text on midnight iris background (header)
+        ash: '#94a3b8', // subtle text on dark background
       },
       fontFamily: {
         // Gilroy with a neutral geometric fallback stack.

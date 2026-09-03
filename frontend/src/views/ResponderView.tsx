@@ -1,15 +1,8 @@
 /**
  * View 2 — Field Responder (first aid + Urdu audio guidance).
  *
- * Wiring notes where the brief and the backend differ:
- *   - Accept/Decline call POST /responder/respond with
- *     `action: "accept" | "decline"` (the backend's literal), not
- *     `status: "accepted"`.
- *   - Help-bot audio is NOT served from `/api/v1/media/tts?file=...`; the step
- *     reply carries a relative `/media/helpbot/tts_cache/<sha1>.wav` URL from
- *     the StaticFiles mount, which resolveMediaUrl() turns absolute.
- *   - Decline runs the Module 8 fallback walker server-side and returns the
- *     newly assigned responder, so the alert card re-targets itself.
+ * Streamlined Help-Bot Interface with Web Speech STT, automatic guidance trigger,
+ * clean conversation list, and inverted white card surfaces.
  */
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -17,15 +10,14 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useCockpit, incidentResponderId } from '../state/CockpitContext'
 import { resolveMediaUrl } from '../lib/api'
 import { distanceKm, responderPosition, villageById } from '../lib/geography'
-import { quickRepliesFor, type QuickReply } from '../lib/scenarios'
 import {
   availabilityMeta,
   formatClock,
   humaniseFlag,
   secondsSince,
-  tierMeta,
 } from '../lib/urdu'
 import type { HelpBotBranch } from '../lib/types'
+import { useSpeechToText } from '../hooks/useSpeechToText'
 import {
   AudioWave,
   Card,
@@ -57,15 +49,14 @@ export function ResponderView() {
   const [branchId, setBranchId] = useState<HelpBotBranch | string>('heavy_bleeding')
   const [audioSrc, setAudioSrc] = useState<string | null>(null)
   const [audioPlaying, setAudioPlaying] = useState(false)
-  const [autoPlay, setAutoPlay] = useState(true)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const logRef = useRef<HTMLDivElement | null>(null)
+  const initialTriggered = useRef(false)
 
   const responderId = incidentResponderId(record, lastReport)
   const responder = responders.find((r) => r.responder_id === responderId) ?? null
 
   const tier = incident?.severity_tier ?? timeline?.severity_tier ?? null
-  const meta = tierMeta(tier)
   const status = timeline?.status ?? null
   const isClosed = status === 'closed'
   const arrived = Boolean(incident?.responder_arrived_timestamp)
@@ -75,9 +66,6 @@ export function ResponderView() {
       const name = String(e.event ?? e.type ?? '').toLowerCase()
       return name.includes('ack') || name.includes('accept') || name.includes('en_route')
     })
-    // The lifecycle record polls at twice the timeline interval, so also read
-    // the faster feed — it carries responder_en_route the moment the ack lands,
-    // which is what flips Accept/Decline into Mark Arrived without a visible lag.
     const enRoute = (timeline?.updates ?? []).some(
       (u) => u.stage === 'responder_en_route',
     )
@@ -98,15 +86,13 @@ export function ResponderView() {
     })
   }, [incident, responderId, responder])
 
-  const replies = useMemo(() => quickRepliesFor(branchId), [branchId])
-
   // Keep the transcript scrolled to the newest turn.
   useEffect(() => {
     const el = logRef.current
     if (el) el.scrollTop = el.scrollHeight
   }, [botTurns.length])
 
-  // Stream the newest bot line as soon as it lands.
+  // Stream the newest bot line as soon as it lands
   useEffect(() => {
     const last = botTurns[botTurns.length - 1]
     if (!last || last.speaker !== 'bot') return
@@ -116,14 +102,18 @@ export function ResponderView() {
       return
     }
     setAudioSrc(url)
-    if (autoPlay) {
-      // Autoplay can be refused before any user gesture; the manual play button
-      // below is the fallback, so a rejection is not an error worth surfacing.
-      window.setTimeout(() => {
-        void audioRef.current?.play().catch(() => setAudioPlaying(false))
-      }, 60)
+    window.setTimeout(() => {
+      void audioRef.current?.play().catch(() => setAudioPlaying(false))
+    }, 80)
+  }, [botTurns])
+
+  // Automatically start / trigger voice bot guidance when navigating to Field Responder view
+  useEffect(() => {
+    if (incidentId && botTurns.length === 0 && !initialTriggered.current && !isClosed) {
+      initialTriggered.current = true
+      void sendHelpBotTurn('سلام، میں جائے وقوعہ پر پہنچ رہا ہوں، پہلی طبی امداد کی رہنمائی فرمائیں')
     }
-  }, [botTurns, autoPlay])
+  }, [incidentId, botTurns.length, isClosed, sendHelpBotTurn])
 
   async function handleRespond(action: 'accept' | 'decline') {
     setActing(action)
@@ -187,28 +177,28 @@ export function ResponderView() {
         right={<TierBadge tier={tier} />}
         className={
           status === 'dispatched' && !accepted
-            ? 'border-clinical-cyan/70 shadow-glow animate-fade-rise'
+            ? 'border-sky-400 ring-2 ring-sky-200'
             : ''
         }
       >
         <div className="flex flex-col gap-4">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <InfoTile label="Responder">
-              <span className="text-pearl">{responder?.name ?? responderId ?? '—'}</span>
-              <span className="ml-1.5 font-mono text-[10px] text-ash">
+              <span className="font-bold text-slate-900">{responder?.name ?? responderId ?? '—'}</span>
+              <span className="ml-1.5 font-mono text-[10px] text-slate-500">
                 {responderId ?? ''}
               </span>
             </InfoTile>
 
             <InfoTile label="Distance to patient">
-              <span className="text-clinical-cyan tabular-nums">
+              <span className="font-bold text-sky-700 tabular-nums">
                 {distance !== null ? `${distance.toFixed(1)} km` : '—'}
               </span>
-              <span className="ml-1.5 text-[10px] text-ash/70">village-derived</span>
+              <span className="ml-1.5 text-[10px] text-slate-500">village-derived</span>
             </InfoTile>
 
             <InfoTile label="Availability">
-              <span className={`inline-flex items-center gap-1.5 ${avMeta.text}`}>
+              <span className="inline-flex items-center gap-1.5 font-semibold text-slate-800">
                 <StatusDot
                   tone={
                     responder?.current_availability_status === 'available'
@@ -217,18 +207,17 @@ export function ResponderView() {
                         ? 'cyan'
                         : 'ash'
                   }
-                  pulse={responder?.current_availability_status === 'busy'}
                 />
                 {avMeta.en}
               </span>
             </InfoTile>
 
             <InfoTile label="Dispatched at">
-              <span className="font-mono text-xs text-pearl tabular-nums">
+              <span className="font-mono text-xs font-semibold text-slate-800 tabular-nums">
                 {formatClock(incident.responder_dispatch_timestamp)}
               </span>
               {incident.responder_dispatch_timestamp && !isClosed && (
-                <span className="ml-1.5 text-[10px] text-ash/70 tabular-nums">
+                <span className="ml-1.5 text-[10px] text-slate-500 tabular-nums">
                   +{secondsSince(incident.responder_dispatch_timestamp) ?? 0}s
                 </span>
               )}
@@ -236,13 +225,13 @@ export function ResponderView() {
           </div>
 
           {/* Injury summary */}
-          <div className="rounded-card border border-iris-border bg-iris-canvas/45 px-4 py-3">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
             <p className="label mb-2">Injury summary</p>
             <div className="flex flex-wrap gap-2">
               {incident.injury_type_flags.map((f) => (
                 <span
                   key={f}
-                  className={`tag normal-case tracking-normal ${meta.border} ${meta.bg} ${meta.text}`}
+                  className="tag normal-case tracking-normal border-slate-200 bg-white text-slate-800"
                 >
                   {humaniseFlag(f)}
                 </span>
@@ -251,7 +240,7 @@ export function ResponderView() {
             {incident.voice_transcript && (
               <p
                 dir="rtl"
-                className="mt-2.5 text-[14px] leading-7 text-ash font-urdu"
+                className="mt-2.5 text-[14px] leading-7 text-slate-700 font-urdu"
               >
                 {incident.voice_transcript}
               </p>
@@ -260,7 +249,7 @@ export function ResponderView() {
 
           {/* Escalation state — live feedback from the polled record */}
           {(incident.mid_incident_escalated || incident.ambulance_requested) && (
-            <div className="flex flex-wrap items-center gap-2 rounded-card border border-tier-critical/55 bg-tier-critical/12 px-4 py-3">
+            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-rose-300 bg-rose-50 p-4">
               <Tag tone="critical">severity upgraded</Tag>
               {incident.ambulance_requested && (
                 <Tag tone="critical">ambulance requested</Tag>
@@ -269,14 +258,14 @@ export function ResponderView() {
                 <Tag tone="critical">mid_incident_escalated</Tag>
               )}
               {incident.bhu_notified && <Tag tone="cyan">BHU notified</Tag>}
-              <span dir="rtl" className="ml-auto text-[14px] text-tier-critical font-urdu leading-7">
+              <span dir="rtl" className="ml-auto text-[14px] text-rose-800 font-urdu font-semibold leading-7">
                 مریض کی حالت بگڑ گئی — ایمرجنسی بڑھا دی گئی ہے
               </span>
             </div>
           )}
 
           {/* Actions */}
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 pt-1">
             {!accepted && !isClosed && (
               <>
                 <Pill
@@ -311,9 +300,8 @@ export function ResponderView() {
                   <span className="opacity-80">(Decline)</span>
                 </Pill>
 
-                <span className="text-[11px] text-ash/70">
-                  Declining immediately runs the Module 8 fallback walker and
-                  re-targets the next ranked responder.
+                <span className="text-[11px] text-slate-500">
+                  Declining triggers automatic fallback and re-targets the next available responder.
                 </span>
               </>
             )}
@@ -337,7 +325,7 @@ export function ResponderView() {
             )}
 
             {arrived && (
-              <span className="inline-flex items-center gap-2 rounded-full border border-mint-vital/55 bg-mint-vital/12 px-4 py-2 text-xs text-mint-vital">
+              <span className="inline-flex items-center gap-2 rounded-full border border-emerald-300 bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-800">
                 <StatusDot tone="mint" />
                 On scene since {formatClock(incident.responder_arrived_timestamp)}
               </span>
@@ -352,33 +340,20 @@ export function ResponderView() {
       <Card
         title="Responder Help Bot"
         titleUr="مددگار بوٹ — اردو رہنمائی"
-        subtitle={`Deterministic state machine · branch "${branchId}" · hands-free voice-in / voice-out`}
-        right={
-          <div className="flex items-center gap-2">
-            <Tag tone="cyan">Module 2</Tag>
-            <label className="flex cursor-pointer items-center gap-1.5 text-[10px] uppercase tracking-wider text-ash">
-              <input
-                type="checkbox"
-                checked={autoPlay}
-                onChange={(e) => setAutoPlay(e.target.checked)}
-                className="h-3 w-3 accent-clinical-cyan"
-              />
-              autoplay
-            </label>
-          </div>
-        }
+        subtitle={`Branch "${branchId}" · turn-by-turn conversational audio guidance`}
+        right={<Tag tone="cyan">AI Guidance</Tag>}
         panel
       >
         <div className="flex flex-col gap-4">
           {/* Audio player streaming the cached Urdu TTS wav */}
-          <div className="flex flex-wrap items-center gap-3 rounded-card border border-iris-border bg-iris-canvas/45 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3.5">
             <AudioWave active={audioPlaying} />
             <div className="min-w-0 flex-1">
-              <p className="text-[11px] uppercase tracking-wider text-ash">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-600">
                 Spoken guidance (Urdu TTS)
               </p>
-              <p className="truncate font-mono text-[10px] text-ash/65">
-                {audioSrc ?? 'no audio for the last turn'}
+              <p className="truncate font-mono text-[10px] text-slate-400">
+                {audioSrc ?? 'audio streaming ready'}
               </p>
             </div>
             <audio
@@ -397,13 +372,13 @@ export function ResponderView() {
           {/* Conversation log */}
           <div
             ref={logRef}
-            className="flex max-h-[340px] min-h-[180px] flex-col gap-2.5 overflow-y-auto rounded-card border border-iris-border bg-iris-canvas/35 px-4 py-3.5"
+            className="flex max-h-[380px] min-h-[200px] flex-col gap-3 overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50/50 p-4"
           >
             {botTurns.length === 0 ? (
-              <p className="m-auto max-w-sm text-center text-xs text-ash/80">
-                Send a quick reply below to open the guidance session. The backend
-                routes the incident's injury flags to a branch and speaks step 1.
-              </p>
+              <div className="m-auto flex flex-col items-center gap-2 py-6 text-center text-xs text-slate-500">
+                <Spinner className="h-4 w-4" />
+                <span>رہنمائی شروع ہو رہی ہے… (Starting guidance session)</span>
+              </div>
             ) : (
               botTurns.map((t, i) => (
                 <div
@@ -411,26 +386,26 @@ export function ResponderView() {
                   className={`flex ${t.speaker === 'responder' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                    className={`max-w-[85%] rounded-card border px-3.5 py-2.5 ${
+                    className={`max-w-[85%] rounded-2xl border p-3.5 shadow-sm ${
                       t.speaker === 'responder'
-                        ? 'border-iris-glow bg-iris-pulse/25'
+                        ? 'border-sky-300 bg-sky-50 text-sky-950'
                         : t.escalated
-                          ? 'border-tier-critical/60 bg-tier-critical/12'
-                          : 'border-iris-border bg-iris-shadow'
+                          ? 'border-rose-300 bg-rose-50 text-rose-950'
+                          : 'border-slate-200 bg-white text-slate-900'
                     }`}
                   >
-                    <p className="mb-1 text-[9px] uppercase tracking-wider text-ash">
-                      {t.speaker === 'responder' ? 'You' : 'Help Bot'}
+                    <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      {t.speaker === 'responder' ? 'You (آپ)' : 'Help Bot (رہنما)'}
                       {t.intent ? ` · ${t.intent}` : ''}
                       {t.escalated ? ' · ESCALATION' : ''}
-                      <span className="ml-2 font-mono normal-case">
+                      <span className="ml-2 font-mono font-normal normal-case text-slate-400">
                         {formatClock(new Date(t.at).toISOString())}
                       </span>
                     </p>
                     <p
                       dir="rtl"
                       className={`text-[15px] leading-8 font-urdu ${
-                        t.escalated ? 'text-tier-critical' : 'text-pearl'
+                        t.escalated ? 'text-rose-900 font-semibold' : 'text-slate-900'
                       }`}
                     >
                       {t.text}
@@ -441,54 +416,25 @@ export function ResponderView() {
             )}
             {pendingTurn && (
               <div className="flex justify-start">
-                <span className="inline-flex items-center gap-2 rounded-full border border-iris-border bg-iris-shadow px-3.5 py-2 text-[11px] text-clinical-cyan">
+                <span className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white px-3.5 py-2 text-[11px] font-medium text-sky-700 shadow-sm">
                   <Spinner className="h-3 w-3" /> classifying intent…
                 </span>
               </div>
             )}
           </div>
 
-          {/* Quick-response action pills */}
-          <div>
-            <p className="label">Quick responses</p>
-            <div className="flex flex-wrap gap-2">
-              {replies.map((r: QuickReply) => (
-                <button
-                  key={r.id}
-                  type="button"
-                  disabled={pendingTurn !== null || isClosed}
-                  onClick={() => handleTurn(r.transcript_ur)}
-                  className={`pill border px-4 py-2 text-xs disabled:opacity-45 ${
-                    r.tone === 'critical'
-                      ? 'border-tier-critical/55 bg-tier-critical/12 text-tier-critical hover:bg-tier-critical/22'
-                      : r.tone === 'mint'
-                        ? 'border-mint-vital/50 bg-mint-vital/12 text-mint-vital hover:bg-mint-vital/22'
-                        : 'border-clinical-cyan/50 bg-clinical-cyan/12 text-clinical-cyan hover:bg-clinical-cyan/22'
-                  }`}
-                  title={r.transcript_ur}
-                >
-                  <span dir="rtl" className="font-urdu text-[14px] leading-6">
-                    {r.transcript_ur}
-                  </span>
-                  <span className="opacity-70">· {r.label_en}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Free-text Urdu input */}
+          {/* Direct Urdu Voice & Text input */}
           <FreeTextInput
             disabled={pendingTurn !== null || isClosed}
             onSend={handleTurn}
           />
 
-          <p className="text-[11px] text-ash/70">
-            Any deterioration reported here upgrades severity and fires Module 8
-            escalation server-side — the badges above and the reporter's live feed
-            both update on the next 2.5s poll.
+          <p className="text-[11px] text-slate-500">
+            Deterioration reported here immediately upgrades severity and triggers emergency
+            escalation server-side.
           </p>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 pt-1">
             <Pill variant="cyan" onClick={() => setRole('bhu')}>
               Continue to BHU View →
             </Pill>
@@ -496,7 +442,7 @@ export function ResponderView() {
               ← Reporter View
             </Pill>
             {villageById(incident.gps_location.village_id) && (
-              <span className="self-center text-[11px] text-ash/70">
+              <span className="self-center text-[11px] text-slate-500">
                 {villageById(incident.gps_location.village_id)?.label_en} · linked BHU{' '}
                 {villageById(incident.gps_location.village_id)?.linked_bhu_id}
               </span>
@@ -510,9 +456,9 @@ export function ResponderView() {
 
 function InfoTile({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="rounded-card border border-iris-border bg-iris-canvas/45 px-3.5 py-2.5">
-      <p className="text-[10px] uppercase tracking-wider text-ash">{label}</p>
-      <p className="mt-0.5 text-sm font-medium tracking-tight">{children}</p>
+    <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</p>
+      <p className="mt-0.5 text-sm font-semibold tracking-tight text-slate-800">{children}</p>
     </div>
   )
 }
@@ -525,9 +471,19 @@ function FreeTextInput({
   disabled: boolean
 }) {
   const [value, setValue] = useState('')
+
+  // Web Speech API Voice Input
+  const { isListening, isSupported, toggleListening } = useSpeechToText({
+    lang: 'ur-PK',
+    fallbackLang: 'ur',
+    onTranscript: (spokenText) => {
+      setValue(spokenText)
+    },
+  })
+
   return (
     <form
-      className="flex flex-wrap items-center gap-2"
+      className="flex flex-wrap items-center gap-2.5"
       onSubmit={(e) => {
         e.preventDefault()
         const text = value.trim()
@@ -536,6 +492,24 @@ function FreeTextInput({
         setValue('')
       }}
     >
+      {/* Microphone pill button */}
+      {isSupported && (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={toggleListening}
+          className={`pill px-4 py-2.5 text-xs font-semibold transition-all ${
+            isListening
+              ? 'bg-rose-600 hover:bg-rose-700 text-white animate-pulse border-2 border-rose-400 shadow-md ring-2 ring-rose-300'
+              : 'bg-sky-600 hover:bg-sky-700 text-white shadow-sm'
+          }`}
+          title="Speak in Urdu"
+        >
+          <span className="text-sm">{isListening ? '🛑' : '🎙️'}</span>
+          <span>{isListening ? '🛑 سن رہا ہے... (Listening - Click to Stop)' : '🎙️ بولیں (Speak)'}</span>
+        </button>
+      )}
+
       <input
         dir="rtl"
         value={value}
@@ -545,6 +519,7 @@ function FreeTextInput({
         className="field flex-1 font-urdu text-[15px] leading-7"
         aria-label="Responder Urdu transcript"
       />
+
       <Pill variant="primary" type="submit" disabled={disabled || !value.trim()}>
         <span dir="rtl" className="font-urdu text-[14px] leading-6">
           بھیجیں

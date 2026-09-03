@@ -1,16 +1,11 @@
 /**
- * View 1 — Reporter View (Urdu distress reporting).
+ * View 1 — Reporter View (Urdu distress reporting & AI Triage).
  *
- * Submits to POST /api/v1/emergency/report, which is FORM-ENCODED with six
- * fields and treats photo_ref + voice_ref as MANDATORY (400 MISSING_PHOTO /
- * MISSING_VOICE_INPUT otherwise). Both refs are server-side paths, not uploads:
- * the API has no file-upload endpoint, so the native pickers preview locally
- * and submit the file name as the ref — which correctly lands in Module 1's
- * fail-safe (moderate + low_confidence_triage) rather than pretending a
- * transfer happened.
+ * Streamlined ingestion with Web Speech STT voice input, real-time MediaRecorder
+ * audio capture, clean empty placeholders, and high-contrast inverted white card surfaces.
  */
 
-import { useMemo, useState } from 'react'
+import { useRef, useState } from 'react'
 
 import { useCockpit } from '../state/CockpitContext'
 import {
@@ -18,16 +13,11 @@ import {
   villageById,
   VILLAGES,
 } from '../lib/geography'
-import {
-  photoRef,
-  SCENARIOS,
-  scenarioById,
-  voiceRef,
-  type Scenario,
-} from '../lib/scenarios'
+import { photoRef, voiceRef } from '../lib/scenarios'
 import { humaniseFlag, tierMeta } from '../lib/urdu'
 import type { ReportResponse } from '../lib/types'
 import { API_BASE } from '../lib/api'
+import { useSpeechToText } from '../hooks/useSpeechToText'
 import {
   Card,
   EmptyState,
@@ -38,7 +28,7 @@ import {
   TierBadge,
 } from '../components/ui'
 
-/** Real assets under mockdata/media — the only refs that hit the triage cache. */
+/** Real assets under mockdata/media */
 const PHOTO_ASSETS = [
   'PhotoshopExtension_Image.png',
   'PhotoshopExtension_Image (1).png',
@@ -49,41 +39,92 @@ const VOICE_ASSETS = ['saanp.mp3', 'taang.mp3', 'ungli.mp3']
 export function ReporterView() {
   const { submitReport, incident, lastReport, backendOnline, setRole } = useCockpit()
 
-  const [selectedScenario, setSelectedScenario] = useState<string | null>(null)
   const [villageId, setVillageId] = useState('VILLAGE-A')
   const [photo, setPhoto] = useState(photoRef(PHOTO_ASSETS[1]))
   const [voice, setVoice] = useState(voiceRef(VOICE_ASSETS[2]))
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const [voicePreview, setVoicePreview] = useState<string | null>(null)
   const [reporterId, setReporterId] = useState('REP-USER-001')
+  const [distressText, setDistressText] = useState('')
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
   const [result, setResult] = useState<ReportResponse | null>(null)
+
+  // Real in-browser audio recording state (MediaRecorder)
+  const [isRecordingAudio, setIsRecordingAudio] = useState(false)
+  const [recordingSeconds, setRecordingSeconds] = useState(0)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const timerIntervalRef = useRef<number | null>(null)
 
   const village = villageById(villageId)
   const [lat, setLat] = useState(String(village?.default_report_gps.lat ?? 31.5204))
   const [lng, setLng] = useState(String(village?.default_report_gps.lng ?? 74.3587))
 
-  /** Presets are cache-backed when their media pair is in .triage_cache. */
-  const isCacheBackedPair = useMemo(() => {
-    return SCENARIOS.some(
-      (s) => s.cache_backed && s.photo_ref === photo && s.voice_ref === voice,
-    )
-  }, [photo, voice])
+  // -------------------------------------------------------------------------
+  // Web Speech API Voice Input (Urdu PK / UR fallback)
+  // -------------------------------------------------------------------------
+  const { isListening, isSupported, toggleListening } = useSpeechToText({
+    lang: 'ur-PK',
+    fallbackLang: 'ur',
+    onTranscript: (spokenText) => {
+      setDistressText(spokenText)
+      // Pick appropriate voice ref asset based on spoken keywords if relevant
+      if (spokenText.includes('سانپ') || spokenText.includes('کاٹا') || spokenText.includes('ڈس')) {
+        setVoice(voiceRef('saanp.mp3'))
+      } else if (spokenText.includes('ٹانگ') || spokenText.includes('ہڈی') || spokenText.includes('ٹوٹ')) {
+        setVoice(voiceRef('taang.mp3'))
+      } else if (spokenText.includes('انگلی') || spokenText.includes('زخم') || spokenText.includes('کٹ')) {
+        setVoice(voiceRef('ungli.mp3'))
+      }
+    },
+  })
 
-  function applyScenario(s: Scenario) {
-    setSelectedScenario(s.id)
-    setPhoto(s.photo_ref)
-    setVoice(s.voice_ref)
-    setVillageId(s.village_id)
-    const geo = villageById(s.village_id)
-    if (geo) {
-      setLat(String(geo.default_report_gps.lat))
-      setLng(String(geo.default_report_gps.lng))
+  // -------------------------------------------------------------------------
+  // MediaRecorder Real Audio Capture
+  // -------------------------------------------------------------------------
+  async function startAudioRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const recorder = new MediaRecorder(stream)
+      mediaRecorderRef.current = recorder
+      audioChunksRef.current = []
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data)
+        }
+      }
+
+      recorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' })
+        const audioUrl = URL.createObjectURL(audioBlob)
+        setVoicePreview(audioUrl)
+        setVoice(`recorded_audio_${Date.now()}.wav`)
+        stream.getTracks().forEach((track) => track.stop())
+      }
+
+      recorder.start()
+      setIsRecordingAudio(true)
+      setRecordingSeconds(0)
+
+      timerIntervalRef.current = window.setInterval(() => {
+        setRecordingSeconds((prev) => prev + 1)
+      }, 1000)
+    } catch (err) {
+      setFailure('Microphone access denied or unavailable for audio recording.')
     }
-    setPhotoPreview(null)
-    setVoicePreview(null)
-    setFailure(null)
+  }
+
+  function stopAudioRecording() {
+    if (mediaRecorderRef.current && isRecordingAudio) {
+      mediaRecorderRef.current.stop()
+      setIsRecordingAudio(false)
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current)
+        timerIntervalRef.current = null
+      }
+    }
   }
 
   function onVillageChange(next: string) {
@@ -117,6 +158,7 @@ export function ReporterView() {
         reporter_id: reporterId.trim() || 'REP-USER-001',
         photo_ref: photo.trim(),
         voice_ref: voice.trim(),
+        voice_transcript: distressText.trim() || undefined,
       })
       setResult(res)
     } catch (cause) {
@@ -128,87 +170,63 @@ export function ReporterView() {
     }
   }
 
-  // Prefer the freshly submitted result; fall back to the polled record so the
-  // panel stays populated after a role switch.
   const shownIncident = result?.incident ?? incident
   const shownDispatch = result?.dispatch ?? null
   const meta = tierMeta(shownIncident?.severity_tier ?? null)
 
   return (
     <div className="flex flex-col gap-4">
-      {/* ---------------- Preset scenario selector ---------------- */}
+      {/* ---------------- Ingestion form ---------------- */}
       <Card
-        title="Preset Scenarios"
-        titleUr="تیار شدہ منظرنامے"
-        subtitle="One click loads media that is already in the backend triage cache — instant and quota-free."
-        right={
-          <Tag tone={isCacheBackedPair ? 'mint' : 'ash'}>
-            {isCacheBackedPair ? 'cache-backed' : 'live AI call'}
-          </Tag>
-        }
+        title="Distress Emergency Report"
+        titleUr="ایمرجنسی رپورٹ درج کریں"
+        subtitle="Voice speech-to-text and injury photo ingestion for rapid AI Triage & Dispatch."
+        panel
       >
-        <div className="grid gap-2.5 sm:grid-cols-2">
-          {SCENARIOS.map((s) => {
-            const active = selectedScenario === s.id
-            const accent =
-              s.accent === 'critical'
-                ? 'border-tier-critical/55 hover:bg-tier-critical/12'
-                : 'border-clinical-cyan/50 hover:bg-clinical-cyan/12'
-            return (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => applyScenario(s)}
-                className={`flex flex-col gap-1 rounded-card border px-4 py-3 text-left transition-all duration-150 ${accent} ${
-                  active
-                    ? 'bg-iris-pulse/30 border-iris-glow shadow-glow'
-                    : 'bg-iris-canvas/45'
-                }`}
-              >
-                <span className="flex items-center justify-between gap-2">
-                  <span className="text-[13px] font-semibold tracking-tight text-pearl">
-                    {s.title_en}
-                  </span>
-                  {s.cache_backed ? (
-                    <span className="shrink-0 rounded-full border border-mint-vital/45 bg-mint-vital/10 px-2 py-0.5 text-[9px] uppercase tracking-wider text-mint-vital">
-                      instant
-                    </span>
-                  ) : (
-                    <span className="shrink-0 rounded-full border border-clinical-cyan/45 bg-clinical-cyan/10 px-2 py-0.5 text-[9px] uppercase tracking-wider text-clinical-cyan">
-                      live AI
-                    </span>
-                  )}
-                </span>
-                <span dir="rtl" className="text-[13px] text-ash font-urdu leading-6">
-                  {s.title_ur}
-                </span>
-                <span className="text-[11px] text-ash/75">{s.subtitle_en}</span>
-                <span className="mt-1 flex items-center gap-1.5">
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full ${tierMeta(s.expected_tier).dot}`}
-                  />
-                  <span className="text-[10px] uppercase tracking-wider text-ash">
-                    expected {s.expected_tier} · {s.village_id} · branch{' '}
-                    {s.expected_branch}
-                  </span>
-                </span>
-              </button>
-            )
-          })}
-        </div>
-      </Card>
+        <div className="grid gap-5 lg:grid-cols-2">
+          {/* Spoken / Written Distress Voice Description with Web Speech API */}
+          <div className="flex flex-col gap-2.5 lg:col-span-2 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-700" htmlFor="distress-input">
+                🎙️ Patient Condition / Voice Distress Note (مریض کی صورتحال)
+              </label>
+              {isSupported && (
+                <button
+                  type="button"
+                  onClick={toggleListening}
+                  className={`pill px-4 py-2 text-xs font-semibold transition-all ${
+                    isListening
+                      ? 'bg-rose-600 hover:bg-rose-700 text-white animate-pulse border-2 border-rose-400 shadow-md ring-2 ring-rose-300'
+                      : 'bg-sky-600 hover:bg-sky-700 text-white shadow-sm'
+                  }`}
+                >
+                  <span className="text-sm">{isListening ? '🛑' : '🎙️'}</span>
+                  <span>{isListening ? '🛑 سن رہا ہے... (Listening - Click to Stop)' : '🎙️ بولیں (Speak)'}</span>
+                </button>
+              )}
+            </div>
 
-      {/* ---------------- Custom ingestion form ---------------- */}
-      <Card
-        title="Custom Ingestion"
-        titleUr="اپنی رپورٹ درج کریں"
-        subtitle="Both a photo ref and an Urdu voice-note ref are mandatory — Module 1 never merges STT and vision into one call."
-      >
-        <div className="grid gap-4 lg:grid-cols-2">
-          {/* Photo */}
-          <div className="flex flex-col gap-2">
+            <div className="relative">
+              <textarea
+                id="distress-input"
+                dir="rtl"
+                rows={2}
+                value={distressText}
+                onChange={(e) => setDistressText(e.target.value)}
+                placeholder=""
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 font-urdu text-[15px] leading-7 text-slate-900 focus:border-clinical-cyan focus:outline-none focus:ring-1 focus:ring-clinical-cyan"
+                aria-label="Distress voice transcript input"
+              />
+            </div>
+            <p className="text-[11px] text-slate-500">
+              Click <strong className="text-slate-700">"بولیں (Speak)"</strong> to dictate in Urdu via speech recognition, or type directly into the box.
+            </p>
+          </div>
+
+          {/* Photo evidence */}
+          <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-slate-50/50 p-3.5">
             <label className="label" htmlFor="photo-asset">
-              Patient photo
+              Patient photo evidence
             </label>
             <select
               id="photo-asset"
@@ -217,7 +235,6 @@ export function ReporterView() {
               onChange={(e) => {
                 if (e.target.value) {
                   setPhoto(photoRef(e.target.value))
-                  setSelectedScenario(null)
                   setPhotoPreview(null)
                 }
               }}
@@ -232,7 +249,7 @@ export function ReporterView() {
 
             <label className="pill-ghost cursor-pointer px-3.5 py-2 text-xs">
               <UploadIcon />
-              Upload from this device…
+              Upload photo from device…
               <input
                 type="file"
                 accept="image/*"
@@ -241,7 +258,6 @@ export function ReporterView() {
                   const f = e.target.files?.[0]
                   if (!f) return
                   setPhoto(f.name)
-                  setSelectedScenario(null)
                   setPhotoPreview(URL.createObjectURL(f))
                 }}
               />
@@ -251,19 +267,19 @@ export function ReporterView() {
               <img
                 src={photoPreview}
                 alt="Selected patient photo preview"
-                className="h-28 w-full rounded-card border border-iris-border object-cover"
+                className="h-28 w-full rounded-card border border-slate-200 object-cover"
               />
             ) : (
-              <p className="truncate font-mono text-[10px] text-ash/70" title={photo}>
+              <p className="truncate font-mono text-[10px] text-slate-400" title={photo}>
                 ref: {photo}
               </p>
             )}
           </div>
 
-          {/* Voice */}
-          <div className="flex flex-col gap-2">
+          {/* Voice note asset with Live Recording & Upload */}
+          <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-slate-50/50 p-3.5">
             <label className="label" htmlFor="voice-asset">
-              Urdu voice note
+              Urdu voice note audio
             </label>
             <select
               id="voice-asset"
@@ -272,7 +288,6 @@ export function ReporterView() {
               onChange={(e) => {
                 if (e.target.value) {
                   setVoice(voiceRef(e.target.value))
-                  setSelectedScenario(null)
                   setVoicePreview(null)
                 }
               }}
@@ -288,27 +303,50 @@ export function ReporterView() {
               ))}
             </select>
 
-            <label className="pill-ghost cursor-pointer px-3.5 py-2 text-xs">
-              <UploadIcon />
-              Record / upload audio…
-              <input
-                type="file"
-                accept="audio/*"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0]
-                  if (!f) return
-                  setVoice(f.name)
-                  setSelectedScenario(null)
-                  setVoicePreview(URL.createObjectURL(f))
-                }}
-              />
-            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Real in-browser audio recording toggle */}
+              {!isRecordingAudio ? (
+                <button
+                  type="button"
+                  onClick={startAudioRecording}
+                  className="pill-ghost px-3.5 py-2 text-xs font-semibold hover:border-sky-300 hover:text-sky-700"
+                >
+                  <span>🎙️</span>
+                  <span>Record voice note</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={stopAudioRecording}
+                  className="pill bg-rose-600 text-white px-3.5 py-2 text-xs font-semibold animate-pulse border border-rose-400 shadow-sm"
+                >
+                  <span>⏹️</span>
+                  <span>Stop Recording (00:{recordingSeconds < 10 ? `0${recordingSeconds}` : recordingSeconds})</span>
+                </button>
+              )}
+
+              {/* Upload audio file */}
+              <label className="pill-ghost cursor-pointer px-3.5 py-2 text-xs flex-1">
+                <UploadIcon />
+                Upload Audio...
+                <input
+                  type="file"
+                  accept="audio/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    if (!f) return
+                    setVoice(f.name)
+                    setVoicePreview(URL.createObjectURL(f))
+                  }}
+                />
+              </label>
+            </div>
 
             {voicePreview ? (
-              <audio src={voicePreview} controls className="w-full" />
+              <audio src={voicePreview} controls className="w-full mt-1" />
             ) : (
-              <p className="truncate font-mono text-[10px] text-ash/70" title={voice}>
+              <p className="truncate font-mono text-[10px] text-slate-400" title={voice}>
                 ref: {voice}
               </p>
             )}
@@ -374,9 +412,9 @@ export function ReporterView() {
           </div>
         </div>
 
-        <p className="mt-3 text-[11px] text-ash/75">
-          Linked clinic:{' '}
-          <span className="text-clinical-cyan">
+        <p className="mt-3 text-[11px] text-slate-500">
+          Linked BHU:{' '}
+          <span className="font-semibold text-sky-700">
             {village?.linked_bhu_id ?? '—'}
           </span>{' '}
           · Dispatch targets the village group's pre-associated BHU.
@@ -411,7 +449,7 @@ export function ReporterView() {
           </Pill>
 
           {!backendOnline && (
-            <span className="text-[11px] text-tier-critical">
+            <span className="text-[11px] text-rose-600 font-medium">
               Backend unreachable at {API_BASE} — start it before reporting.
             </span>
           )}
@@ -422,31 +460,35 @@ export function ReporterView() {
       <Card
         title="AI Triage Decision"
         titleUr="ٹرئیج کا نتیجہ"
-        subtitle="Inspectable by design — the tier and its reasoning flags are never opaque."
+        subtitle="Inspectable severity tier, injury flags and dispatch reasoning."
         right={shownIncident ? <TierBadge tier={shownIncident.severity_tier} /> : undefined}
       >
         {!shownIncident ? (
           <EmptyState
             title="No triage result yet"
             titleUr="ابھی کوئی نتیجہ نہیں"
-            message="Report an emergency to see the severity tier, extracted injury flags and the dispatch reasoning."
+            message="Report an emergency above to see the severity tier, extracted injury flags and the dispatch reasoning."
           />
         ) : (
           <div className="flex flex-col gap-4">
             <div
-              className={`rounded-card border px-4 py-3.5 ${meta.bg} ${meta.border}`}
+              className={`rounded-card border p-4 ${
+                shownIncident.severity_tier === 'critical'
+                  ? 'border-rose-200 bg-rose-50/70 text-rose-900'
+                  : 'border-sky-200 bg-sky-50/70 text-sky-900'
+              }`}
             >
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <p className="font-mono text-xs text-ash">
+                  <p className="font-mono text-xs font-semibold opacity-70">
                     {shownIncident.incident_id}
                   </p>
-                  <p className="mt-1 text-xl font-semibold tracking-tighter text-pearl">
+                  <p className="mt-1 text-xl font-bold tracking-tight">
                     {meta.label_en}
                     <span className="ml-2 text-sm font-medium opacity-75">
                       {meta.tier_no}
                     </span>
-                    <span dir="rtl" className="ml-2.5 text-[15px] font-urdu opacity-90">
+                    <span dir="rtl" className="ml-2.5 text-[16px] font-urdu">
                       {meta.label_ur}
                     </span>
                   </p>
@@ -469,11 +511,7 @@ export function ReporterView() {
                 {shownIncident.injury_type_flags.map((f) => (
                   <span
                     key={f}
-                    className={`tag normal-case tracking-normal ${
-                      f === 'low_confidence_triage'
-                        ? 'border-ash/45 bg-ash/10 text-ash'
-                        : `${meta.border} ${meta.bg} ${meta.text}`
-                    }`}
+                    className="tag normal-case tracking-normal border-slate-200 bg-slate-100 text-slate-700"
                   >
                     {humaniseFlag(f)}
                   </span>
@@ -486,7 +524,7 @@ export function ReporterView() {
                 <p className="label">Urdu transcript (STT)</p>
                 <p
                   dir="rtl"
-                  className="rounded-card border border-iris-border bg-iris-canvas/50 px-4 py-3 text-[15px] leading-8 text-pearl font-urdu"
+                  className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-[15px] leading-8 text-slate-900 font-urdu"
                 >
                   {shownIncident.voice_transcript}
                 </p>
@@ -495,9 +533,9 @@ export function ReporterView() {
 
             {shownDispatch && (
               <div>
-                <p className="label">Module 3 dispatch reasoning</p>
-                <div className="rounded-card border border-iris-border bg-iris-canvas/50 px-4 py-3">
-                  <p className="text-xs text-pearl">{shownDispatch.reasoning}</p>
+                <p className="label">AI Dispatch reasoning</p>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-xs font-medium text-slate-800">{shownDispatch.reasoning}</p>
                   <div className="mt-2.5 flex flex-wrap gap-2">
                     <Tag tone="cyan">status: {shownDispatch.status}</Tag>
                     {shownDispatch.responder && (
@@ -507,7 +545,7 @@ export function ReporterView() {
                       </Tag>
                     )}
                     {shownDispatch.bhu && (
-                      <Tag tone="cyan">bhu: {shownDispatch.bhu.name}</Tag>
+                      <Tag tone="cyan">BHU: {shownDispatch.bhu.name}</Tag>
                     )}
                     {shownDispatch.bhu_urgency && (
                       <Tag tone={shownDispatch.bhu_urgency === 'urgent' ? 'critical' : 'ash'}>
@@ -515,7 +553,7 @@ export function ReporterView() {
                       </Tag>
                     )}
                     <Tag tone={shownDispatch.notify_bhu ? 'mint' : 'ash'}>
-                      notify_bhu: {String(shownDispatch.notify_bhu)}
+                      notify_BHU: {String(shownDispatch.notify_bhu)}
                     </Tag>
                   </div>
                 </div>
@@ -523,31 +561,25 @@ export function ReporterView() {
             )}
 
             {lastReport && (
-              <p className="text-[11px] text-ash/75">
+              <p className="text-[11px] text-slate-500">
                 PostgreSQL persistence:{' '}
-                <span className={lastReport.db_persisted ? 'text-mint-vital' : 'text-tier-critical'}>
+                <span className={lastReport.db_persisted ? 'text-emerald-600 font-semibold' : 'text-rose-600 font-semibold'}>
                   {lastReport.db_persisted ? 'written' : 'failed (in-memory only)'}
                 </span>
               </p>
             )}
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 pt-1">
               <Pill variant="cyan" onClick={() => setRole('responder')}>
                 Continue to Responder View →
               </Pill>
-              {selectedScenario && scenarioById(selectedScenario) && (
-                <span className="self-center text-[11px] text-ash/70">
-                  preset: {scenarioById(selectedScenario)?.title_en}
-                </span>
-              )}
             </div>
           </div>
         )}
       </Card>
 
-      <p className="px-1 text-[10px] text-ash/55">
-        {VILLAGES.length} villages registered · mockdata assets resolve against the
-        backend's server-side paths.
+      <p className="px-1 text-[10px] text-pearl/60">
+        {VILLAGES.length} villages registered · media assets resolve against backend server paths.
       </p>
     </div>
   )

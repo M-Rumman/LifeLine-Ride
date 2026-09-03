@@ -1,16 +1,13 @@
 /**
- * Global header: brand wordmark, backend health ping, active incident
- * indicator, and the three-stage Role Switcher / Scenario Stepper.
- *
- * The stepper changes role ONLY — it never touches the active incident id, so
- * all three views keep inspecting the same live record.
+ * Global header: brand wordmark, backend health ping (Live / Not Live),
+ * active incident indicator, and the three-stage Role Switcher.
  */
 
 import { useState } from 'react'
 
 import { useCockpit, ROLES, type Role } from '../state/CockpitContext'
 import { statusLabel, tierMeta } from '../lib/urdu'
-import { Pill, StatusDot, Tag } from './ui'
+import { Pill, StatusDot } from './ui'
 import { API_BASE } from '../lib/api'
 
 export function Header() {
@@ -36,7 +33,7 @@ export function Header() {
   const statusText = statusLabel(status)
 
   return (
-    <header className="sticky top-0 z-40 border-b border-iris-border bg-iris-canvas/88 backdrop-blur-xl">
+    <header className="sticky top-0 z-40 border-b border-iris-border bg-[#16165c]/95 backdrop-blur-xl">
       <div className="mx-auto flex max-w-[1800px] flex-wrap items-center gap-x-5 gap-y-3 px-5 py-3">
         {/* ---------------- Brand ---------------- */}
         <div className="flex items-center gap-3">
@@ -50,21 +47,20 @@ export function Header() {
                 strokeLinejoin="round"
               />
             </svg>
-            <span className="absolute inset-0 rounded-full animate-pulse-ring" />
           </div>
           <div className="leading-tight">
-            <h1 className="text-[17px] font-semibold tracking-tighter text-pearl">
+            <h1 className="text-[17px] font-bold tracking-tight text-white">
               LifeLine Ride
             </h1>
-            <p dir="rtl" className="text-[12px] text-ash font-urdu leading-5">
+            <p dir="rtl" className="text-[12px] text-slate-300 font-urdu leading-5">
               دیہی ایمرجنسی رسپانس نیٹ ورک
             </p>
           </div>
         </div>
 
-        <span className="hidden h-8 w-px bg-iris-border lg:block" />
+        <span className="hidden h-8 w-px bg-slate-600/50 lg:block" />
 
-        {/* ---------------- Backend health ping ---------------- */}
+        {/* ---------------- Server status refactor (Live / Not Live) ---------------- */}
         <HealthChip
           online={backendOnline}
           error={backendError}
@@ -72,37 +68,39 @@ export function Header() {
           polling={polling}
         />
 
-        {/* ---------------- Active incident indicator ---------------- */}
+        {/* ---------------- Active incident indicator (High-Contrast) ---------------- */}
         <div className="flex items-center gap-2">
           {incidentId ? (
-            <div className="flex items-center gap-2 rounded-full border border-iris-border bg-iris-shadow px-3.5 py-1.5">
-              <StatusDot
-                tone={status === 'closed' ? 'mint' : 'cyan'}
-                pulse={status !== 'closed'}
-              />
-              <span className="font-mono text-xs text-pearl">{incidentId}</span>
-              {tier && (
-                <span
-                  className={`h-1.5 w-1.5 rounded-full ${tierMeta(tier).dot}`}
-                />
-              )}
-              <span className="text-[11px] text-ash">
-                {statusText.en}
-                <span dir="rtl" className="ml-1.5 font-urdu">
-                  {statusText.ur}
+            <div className="flex items-center justify-between gap-2.5 rounded-full border border-slate-600/70 bg-[#1e1d68] px-4 py-2 shadow-inner">
+              <div className="flex items-center gap-2">
+                <StatusDot tone={status === 'closed' ? 'mint' : 'cyan'} />
+                <span className="font-mono text-xs font-bold text-white">{incidentId}</span>
+                {tier && (
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${tierMeta(tier).dot}`}
+                  />
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 text-[11px]">
+                <span className="font-semibold text-white">{statusText.en}</span>
+                <span dir="rtl" className="font-urdu text-[12px] leading-none text-slate-200">
+                  ({statusText.ur})
                 </span>
-              </span>
+              </div>
             </div>
           ) : (
-            <Tag tone="ash">No active incident</Tag>
+            <div className="flex items-center gap-2 rounded-full border border-slate-600/70 bg-[#1e1d68] px-4 py-2 text-xs">
+              <StatusDot tone="ash" />
+              <span className="text-slate-200 font-medium">No active incident</span>
+            </div>
           )}
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          {/* ---------------- Role Switcher / Scenario Stepper ---------------- */}
+          {/* ---------------- Role Switcher ---------------- */}
           <nav
             aria-label="Role stepper"
-            className="flex items-center gap-1 rounded-full border border-iris-border bg-iris-shadow p-1"
+            className="flex items-center gap-1 rounded-full border border-slate-600/60 bg-[#16165c] p-1"
           >
             {ROLES.map((r) => (
               <RoleTab
@@ -186,20 +184,20 @@ function RoleTab({
       aria-current={active ? 'step' : undefined}
       className={`pill px-4 py-2 text-xs transition-colors ${
         active
-          ? 'bg-iris-pulse text-pearl border border-iris-glow shadow-glow'
-          : 'border border-transparent text-ash hover:text-pearl hover:bg-iris-pulse/25'
+          ? 'bg-sky-600 text-white font-semibold shadow-md'
+          : 'border border-transparent text-slate-300 hover:text-white hover:bg-white/10'
       }`}
     >
       <span
-        className={`grid place-items-center rounded-full text-[10px] font-semibold ${
-          active ? 'bg-pearl/20 text-pearl' : 'bg-iris-canvas text-ash'
+        className={`grid place-items-center rounded-full text-[10px] font-bold ${
+          active ? 'bg-white/20 text-white' : 'bg-slate-700/60 text-slate-300'
         }`}
         style={{ height: '18px', width: '18px' }}
       >
         {step}
       </span>
       <span className="font-medium tracking-tight">{labelEn}</span>
-      <span dir="rtl" className="font-urdu text-[13px] opacity-85">
+      <span dir="rtl" className="font-urdu text-[13px] opacity-90">
         {labelUr}
       </span>
     </button>
@@ -207,9 +205,8 @@ function RoleTab({
 }
 
 /**
- * Discrete connection indicator. Collapses to a single amber/red dot plus a
- * tooltip when the backend is unreachable so the header never turns into an
- * error banner mid-demo.
+ * Server Status Chip: Displays concise dynamic "Live" (green) or "Not Live" (red)
+ * with static circular status dot.
  */
 function HealthChip({
   online,
@@ -222,42 +219,41 @@ function HealthChip({
   health: { db_reachable?: boolean; responders_loaded?: number; helpbot_sessions?: number } | null
   polling: boolean
 }) {
-  const tone = online ? (health?.db_reachable ? 'mint' : 'cyan') : 'critical'
+  const isLive = online && Boolean(health?.db_reachable)
+  const tone = isLive ? 'mint' : 'critical'
 
   return (
     <div
-      className="flex items-center gap-2 rounded-full border border-iris-border bg-iris-shadow px-3.5 py-1.5"
+      className="flex items-center gap-2 rounded-full border border-slate-600/70 bg-[#1e1d68] px-3.5 py-1.5"
       title={
-        online
-          ? `Backend healthy at ${API_BASE}${
-              health?.db_reachable ? '' : ' (PostgreSQL unreachable — serving seed data)'
-            }`
-          : `Backend unreachable at ${API_BASE}: ${error?.code ?? 'NO_RESPONSE'} — ${
-              error?.message ?? 'no detail'
+        isLive
+          ? `Backend and database healthy at ${API_BASE}`
+          : `Backend or database issue at ${API_BASE}: ${error?.code ?? (online ? 'DB_UNREACHABLE' : 'NO_RESPONSE')} — ${
+              error?.message ?? (online ? 'PostgreSQL unreachable' : 'Backend offline')
             }`
       }
     >
-      <StatusDot tone={tone} pulse={online} />
-      <span className="text-[11px] font-medium text-pearl">
-        {online ? 'Backend live' : 'Backend offline'}
+      <StatusDot tone={tone} />
+      <span className={`text-[12px] font-bold tracking-wide ${isLive ? 'text-emerald-400' : 'text-rose-400'}`}>
+        {isLive ? 'Live' : 'Not Live'}
       </span>
       {online && health && (
-        <span className="hidden items-center gap-2 text-[10px] text-ash xl:flex">
-          <span className="tabular-nums">
+        <span className="hidden items-center gap-2 text-[10px] text-slate-300 xl:flex">
+          <span className="tabular-nums font-mono text-slate-200">
             {health.responders_loaded ?? 0} resp
           </span>
-          <span className="h-3 w-px bg-iris-border" />
-          <span className="tabular-nums">
+          <span className="h-3 w-px bg-slate-600/50" />
+          <span className="tabular-nums font-mono text-slate-200">
             {health.helpbot_sessions ?? 0} bot
           </span>
-          <span className="h-3 w-px bg-iris-border" />
-          <span className={health.db_reachable ? 'text-mint-vital' : 'text-tier-critical'}>
+          <span className="h-3 w-px bg-slate-600/50" />
+          <span className={health.db_reachable ? 'text-emerald-400 font-semibold' : 'text-rose-400 font-semibold'}>
             {health.db_reachable ? 'DB ok' : 'DB down'}
           </span>
         </span>
       )}
       {polling && (
-        <span className="h-1.5 w-1.5 rounded-full bg-clinical-cyan animate-pulse" />
+        <span className="h-1.5 w-1.5 rounded-full bg-clinical-cyan opacity-80" />
       )}
     </div>
   )

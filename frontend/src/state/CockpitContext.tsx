@@ -58,7 +58,7 @@ export const ROLES: {
 }[] = [
   { id: 'reporter', step: 1, label_en: 'Reporter View', label_ur: 'رپورٹر' },
   { id: 'responder', step: 2, label_en: 'Field Responder', label_ur: 'مددگار' },
-  { id: 'bhu', step: 3, label_en: 'BHU Clinic & Audit', label_ur: 'مرکزِ صحت' },
+  { id: 'bhu', step: 3, label_en: 'BHU & Audit', label_ur: 'مرکزِ صحت' },
 ]
 
 const POLL_MS = Number(import.meta.env.VITE_POLL_MS ?? 2500)
@@ -375,7 +375,7 @@ export function CockpitProvider({ children }: { children: ReactNode }) {
           pushToast({
             tone: 'critical',
             title: 'Mid-incident escalation triggered',
-            message: `Signal: ${res.escalation_signal ?? 'condition_worsening'} — Module 8 fallback engaged, ambulance requested.`,
+            message: `Signal: ${res.escalation_signal ?? 'condition_worsening'} — Emergency fallback engaged, ambulance requested.`,
           })
         }
         await Promise.all([timelinePoll.refresh(), recordPoll.refresh()])
@@ -411,7 +411,7 @@ export function CockpitProvider({ children }: { children: ReactNode }) {
           title: 'Incident closed & audited',
           message:
             params.confirmed_by === 'bhu_staff'
-              ? 'BHU-verified closure — Module 5 metrics recorded.'
+              ? 'BHU-verified closure — accountability metrics recorded.'
               : 'Self-reported closure — deliberately NOT counted toward metrics.',
         })
         await Promise.all([

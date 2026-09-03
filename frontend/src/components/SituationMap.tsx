@@ -1,18 +1,14 @@
 /**
  * Persistent Live Situation Map (right panel, top).
  *
- * Leaflet + OpenStreetMap rather than Google Maps: the repo's
- * GOOGLE_MAPS_API_KEY lives in the server-side .env, and a browser bundle must
- * never carry it. OSM tiles need no key, so the demo cannot break on a quota or
- * a leaked credential.
- *
- * Marker provenance is deliberately explicit — the reporter pin is the real GPS
- * submitted with the report, while responder and clinic pins are derived from
- * the seed registry's village association because the backend does not stream
- * their live coordinates. The caption below the map says so.
+ * Leaflet + OpenStreetMap with smooth client-side mock movement simulation:
+ *  - En route responders smoothly advance toward the incident pin along the polyline.
+ *  - When ambulance_requested is true, an ambulance marker departs from the BHU pin.
+ *  - When arrived, responder marker snaps directly onto the incident pin.
+ *  - Palette inverted to clean white card surface with high-contrast labels.
  */
 
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
 
 import { useCockpit } from '../state/CockpitContext'
@@ -28,20 +24,30 @@ import {
 import { StatusDot } from './ui'
 
 const CYAN = '#00b1ff'
-const MINT = '#00ffaa'
-const CRITICAL = '#ff4d6d'
-const IDLE = '#5350cc'
+const MINT = '#00c885'
+const CRITICAL = '#e11d48'
+const AMBULANCE = '#f59e0b'
+const IDLE = '#818cf8'
 
 interface Actor {
   key: string
   position: LatLng
-  kind: 'reporter' | 'responder' | 'bhu' | 'idle'
+  kind: 'reporter' | 'responder' | 'bhu' | 'ambulance' | 'idle'
   title: string
   detail: string
   derived: boolean
 }
 
-function markerIcon(kind: Actor['kind'], size = 15) {
+function markerIcon(kind: Actor['kind'], size = 16) {
+  if (kind === 'ambulance') {
+    return L.divIcon({
+      className: '',
+      html: `<div class="ll-marker ll-marker--ambulance flex items-center justify-center text-[10px] shadow-lg" style="height:${size + 4}px;width:${size + 4}px;border-radius:9999px;background:#f59e0b;border:2px solid #ffffff;color:#ffffff;display:flex;align-items:center;justify-content:center;">🚑</div>`,
+      iconSize: [size + 4, size + 4],
+      iconAnchor: [(size + 4) / 2, (size + 4) / 2],
+    })
+  }
+
   return L.divIcon({
     className: '',
     html: `<span class="ll-marker ll-marker--${kind}" style="display:block;height:${size}px;width:${size}px"></span>`,
@@ -58,8 +64,39 @@ export function SituationMap() {
   const layerRef = useRef<L.LayerGroup | null>(null)
   const fittedSignature = useRef<string>('')
 
+  // Animation progress: 0 to 1 for responder & ambulance movement
+  const [animProgress, setAnimProgress] = useState(0)
+
+  const status = timeline?.status ?? null
+  const isEnRoute = status === 'dispatched' || status === 'responder_en_route' || status === 'en_route'
+  const isArrived = Boolean(incident?.responder_arrived_timestamp) || status === 'arrived' || status === 'closed'
+  const isAmbulanceRequested = Boolean(incident?.ambulance_requested)
+
   // -------------------------------------------------------------------------
-  // Derive the actors currently on the map
+  // Interpolation Animation Loop (18-second smooth cycle)
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    if (!isEnRoute && !isAmbulanceRequested) {
+      setAnimProgress(0)
+      return
+    }
+
+    const durationMs = 18_000
+    const start = performance.now()
+
+    let frameId: number
+    const tick = (now: number) => {
+      const elapsed = (now - start) % durationMs
+      setAnimProgress(elapsed / durationMs)
+      frameId = requestAnimationFrame(tick)
+    }
+
+    frameId = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(frameId)
+  }, [isEnRoute, isAmbulanceRequested])
+
+  // -------------------------------------------------------------------------
+  // Derive the actors currently on the map with simulated movement
   // -------------------------------------------------------------------------
 
   const actors = useMemo<Actor[]>(() => {
@@ -67,47 +104,30 @@ export function SituationMap() {
     const villageId = incident?.gps_location?.village_id ?? null
 
     // Reporter — real submitted GPS.
+    let reporterPos: LatLng | null = null
     if (incident?.gps_location) {
+      reporterPos = {
+        lat: incident.gps_location.latitude,
+        lng: incident.gps_location.longitude,
+      }
       list.push({
         key: 'reporter',
-        position: {
-          lat: incident.gps_location.latitude,
-          lng: incident.gps_location.longitude,
-        },
+        position: reporterPos,
         kind: 'reporter',
-        title: 'Reporter',
+        title: 'Reporter (Emergency Site)',
         detail: `${incident.incident_id} · ${incident.gps_location.village_id}`,
         derived: false,
       })
     }
 
-    // Assigned responder — position derived from its village.
-    const assignedId =
-      incident?.responder_assigned_id ?? timeline?.assigned_responder ?? null
-    if (assignedId) {
-      const known = responders.find((r) => r.responder_id === assignedId)
-      const pos = responderPosition(
-        assignedId,
-        known?.village ?? villageId ?? 'VILLAGE-A',
-      )
-      if (pos) {
-        list.push({
-          key: `responder-${assignedId}`,
-          position: pos,
-          kind: 'responder',
-          title: known?.name ?? assignedId,
-          detail: `${assignedId} · ${known?.village ?? 'village unknown'}`,
-          derived: true,
-        })
-      }
-    }
-
-    // Linked BHU — the fixed association for this village group.
+    // Linked BHU
     const bhuId =
       lastReport?.dispatch?.bhu?.bhu_id ??
       (villageId ? villageById(villageId)?.linked_bhu_id : null)
     const bhu = bhuId ? bhuById(bhuId) : null
+    let bhuPos: LatLng | null = null
     if (bhu) {
+      bhuPos = bhu.location
       list.push({
         key: bhu.bhu_id,
         position: bhu.location,
@@ -118,8 +138,60 @@ export function SituationMap() {
       })
     }
 
+    // Assigned responder — with animated coordinate interpolation along polyline
+    const assignedId =
+      incident?.responder_assigned_id ?? timeline?.assigned_responder ?? null
+    if (assignedId) {
+      const known = responders.find((r) => r.responder_id === assignedId)
+      const basePos = responderPosition(
+        assignedId,
+        known?.village ?? villageId ?? 'VILLAGE-A',
+      )
+      if (basePos) {
+        let currentPos = basePos
+
+        if (isArrived && reporterPos) {
+          // Snap directly onto the incident pin on arrived
+          currentPos = { lat: reporterPos.lat + 0.0002, lng: reporterPos.lng + 0.0002 }
+        } else if (isEnRoute && reporterPos) {
+          // Smooth interpolated progress toward incident location (e.g. 10% to 90% travel)
+          const fraction = Math.min(Math.max(animProgress * 0.9 + 0.05, 0), 0.95)
+          currentPos = {
+            lat: basePos.lat + (reporterPos.lat - basePos.lat) * fraction,
+            lng: basePos.lng + (reporterPos.lng - basePos.lng) * fraction,
+          }
+        }
+
+        list.push({
+          key: `responder-${assignedId}`,
+          position: currentPos,
+          kind: 'responder',
+          title: `${known?.name ?? assignedId} ${isArrived ? '(On Scene)' : isEnRoute ? '(En Route)' : ''}`,
+          detail: `${assignedId} · ${isArrived ? 'On Scene' : isEnRoute ? 'Simulated En Route' : 'Assigned'}`,
+          derived: true,
+        })
+      }
+    }
+
+    // Ambulance — when requested, departs BHU pin toward incident
+    if (isAmbulanceRequested && bhuPos && reporterPos) {
+      const fraction = Math.min(Math.max(animProgress * 0.85 + 0.08, 0), 0.92)
+      const ambPos: LatLng = {
+        lat: bhuPos.lat + (reporterPos.lat - bhuPos.lat) * fraction,
+        lng: bhuPos.lng + (reporterPos.lng - bhuPos.lng) * fraction,
+      }
+      list.push({
+        key: 'ambulance-unit',
+        position: ambPos,
+        kind: 'ambulance',
+        title: 'Ambulance Unit (Dispatching from BHU)',
+        detail: 'Urgent transfer en route to incident site',
+        derived: true,
+      })
+    }
+
     return list
-  }, [incident, responders, timeline, lastReport])
+  }, [incident, responders, timeline, lastReport, isEnRoute, isArrived, isAmbulanceRequested, animProgress])
 
   /** Other registered responders, shown dimmed so coverage reads at a glance. */
   const idleActors = useMemo<Actor[]>(() => {
@@ -163,7 +235,7 @@ export function SituationMap() {
         live: timeline?.status !== 'closed',
       })
     }
-    // Incident -> clinic: transfer vector, armed once BHU is notified.
+    // Incident -> BHU: transfer vector, armed once BHU is notified.
     if (bhu && (incident?.bhu_notified || incident?.ambulance_requested)) {
       out.push({
         key: 'reporter-to-bhu',
@@ -199,8 +271,6 @@ export function SituationMap() {
     layerRef.current = L.layerGroup().addTo(map)
     mapRef.current = map
 
-    // Leaflet needs an explicit invalidateSize when the panel is laid out
-    // after a flex/grid reflow, otherwise tiles render half-blank.
     const ro = new ResizeObserver(() => map.invalidateSize())
     ro.observe(containerRef.current)
 
@@ -226,7 +296,7 @@ export function SituationMap() {
         ],
         {
           color: route.color,
-          weight: 3,
+          weight: 3.5,
           opacity: 0.9,
           className: route.live ? 'route-vector' : 'route-vector--static',
         },
@@ -235,18 +305,18 @@ export function SituationMap() {
 
     for (const actor of [...idleActors, ...actors]) {
       L.marker([actor.position.lat, actor.position.lng], {
-        icon: markerIcon(actor.kind, actor.kind === 'idle' ? 10 : 15),
+        icon: markerIcon(actor.kind, actor.kind === 'idle' ? 10 : actor.kind === 'ambulance' ? 18 : 16),
         title: actor.title,
-        zIndexOffset: actor.kind === 'idle' ? 0 : 500,
+        zIndexOffset: actor.kind === 'idle' ? 0 : actor.kind === 'ambulance' ? 600 : 500,
       })
         .bindPopup(
-          `<div style="min-width:150px">
-             <div style="font-weight:600;letter-spacing:-0.02em">${actor.title}</div>
-             <div style="color:#a9a9d4;font-size:11px;margin-top:2px">${actor.detail}</div>
+          `<div style="min-width:150px; font-family:inherit;">
+             <div style="font-weight:700; color:#0f172a; font-size:13px;">${actor.title}</div>
+             <div style="color:#64748b; font-size:11px; margin-top:2px">${actor.detail}</div>
              ${
                actor.derived
-                 ? '<div style="color:#a9a9d4;font-size:10px;margin-top:4px;opacity:.8">position derived from village registry</div>'
-                 : '<div style="color:#00ffaa;font-size:10px;margin-top:4px">live GPS from report</div>'
+                 ? '<div style="color:#64748b; font-size:10px; margin-top:4px; font-style:italic;">live simulated route</div>'
+                 : '<div style="color:#059669; font-size:10px; margin-top:4px; font-weight:600;">live GPS from report</div>'
              }
            </div>`,
         )
@@ -254,20 +324,20 @@ export function SituationMap() {
     }
   }, [actors, idleActors, routes])
 
-  // Fit bounds only when the cast of actors changes — never on every poll, or
-  // the map would re-zoom every 2.5s and be unusable to look at.
+  // Fit bounds only when incident changes
   useEffect(() => {
     const map = mapRef.current
     if (!map || actors.length === 0) return
 
-    const signature = actors
-      .map((a) => `${a.key}@${a.position.lat.toFixed(3)},${a.position.lng.toFixed(3)}`)
+    const baseActors = actors.filter((a) => a.kind !== 'ambulance')
+    const signature = baseActors
+      .map((a) => `${a.key}`)
       .sort()
       .join('|')
     if (signature === fittedSignature.current) return
     fittedSignature.current = signature
 
-    const bounds = L.latLngBounds(actors.map((a) => [a.position.lat, a.position.lng]))
+    const bounds = L.latLngBounds(baseActors.map((a) => [a.position.lat, a.position.lng]))
     map.fitBounds(bounds.pad(0.45), { animate: true, maxZoom: 14 })
   }, [actors])
 
@@ -285,57 +355,58 @@ export function SituationMap() {
 
   return (
     <div className="card overflow-hidden">
-      <div className="flex items-center justify-between gap-3 px-4 pt-3.5 pb-2.5">
+      <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-3 border-b border-slate-100">
         <div>
-          <h2 className="text-[13px] font-semibold tracking-tight text-pearl">
+          <h2 className="text-[15px] font-bold tracking-tight text-slate-900">
             Live Situation Map
           </h2>
-          <p dir="rtl" className="text-[12px] text-ash font-urdu leading-6">
+          <p dir="rtl" className="text-[12px] text-slate-500 font-urdu leading-5">
             براہِ راست نقشہ
           </p>
         </div>
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
           <LegendItem color={CRITICAL} label="Reporter" />
           <LegendItem color={CYAN} label="Responder" />
           <LegendItem color={MINT} label="BHU" />
+          {isAmbulanceRequested && <LegendItem color={AMBULANCE} label="Ambulance" />}
           <LegendItem color={IDLE} label="Registry" dim />
         </div>
       </div>
 
       <div
         ref={containerRef}
-        className="h-[300px] w-full border-y border-iris-border"
+        className="h-[300px] w-full border-b border-slate-200"
         role="application"
         aria-label="Situation map"
       />
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-4 py-2.5 text-[11px] text-ash">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-5 py-3 text-[11px] text-slate-600 bg-slate-50/50">
         {legKm !== null && (
-          <span className="inline-flex items-center gap-1.5">
-            <StatusDot tone="cyan" pulse />
-            Responder leg
-            <span className="font-semibold text-clinical-cyan tabular-nums">
+          <span className="inline-flex items-center gap-1.5 font-medium">
+            <StatusDot tone="cyan" />
+            Responder leg:
+            <span className="font-bold text-sky-700 tabular-nums">
               {legKm.toFixed(1)} km
             </span>
           </span>
         )}
         {transferKm !== null && (
-          <span className="inline-flex items-center gap-1.5">
+          <span className="inline-flex items-center gap-1.5 font-medium">
             <StatusDot tone="mint" />
-            BHU transfer
-            <span className="font-semibold text-mint-vital tabular-nums">
+            BHU transfer:
+            <span className="font-bold text-emerald-700 tabular-nums">
               {transferKm.toFixed(1)} km
             </span>
           </span>
         )}
         {legKm === null && transferKm === null && (
-          <span>
+          <span className="text-slate-500 italic">
             Awaiting an incident — reporting one pins the reporter, responder and
-            clinic and draws the route vectors.
+            BHU with animated route vectors.
           </span>
         )}
-        <span className="ml-auto opacity-70">
-          {BHUS.length} clinics · {VILLAGES.length} villages
+        <span className="ml-auto font-medium text-slate-500">
+          {BHUS.length} BHUs · {VILLAGES.length} villages
         </span>
       </div>
     </div>
@@ -352,9 +423,9 @@ function LegendItem({
   dim?: boolean
 }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-ash">
+    <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
       <span
-        className="h-2.5 w-2.5 rounded-full border border-pearl/70"
+        className="h-2.5 w-2.5 rounded-full border border-slate-300"
         style={{ background: color, opacity: dim ? 0.6 : 1 }}
       />
       {label}

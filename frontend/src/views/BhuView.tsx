@@ -1,5 +1,5 @@
 /**
- * View 3 — BHU Clinic & Audit (verification gate + outcome sign-off).
+ * View 3 — BHU & Audit (verification gate + outcome sign-off).
  *
  * Contract notes:
  *   - POST /responders/{id}/verify needs { verified_by, equipment_checklist }
@@ -8,15 +8,20 @@
  *     closed_by_id }. `confirmed_by` is restricted to lifecycle.VALID_CONFIRMERS
  *     = "bhu_staff" | "responder"; the actor identity from the brief
  *     (`bhu_staff_01`) belongs in the separate free-text `closed_by_id`.
- *   - Module 5 metrics are awarded ONLY when confirmed_by === "bhu_staff".
- *     Selecting "responder" is kept available precisely to demonstrate that the
- *     fraud gate refuses to count a self-reported closure.
+ *   - Accountability metrics are awarded ONLY when confirmed_by === "bhu_staff".
+ *   - Seed Unverified Candidate button for instant on-demand demo verification.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { useCockpit, incidentResponderId } from '../state/CockpitContext'
-import { getResponderPerformance, listPendingResponders } from '../lib/api'
+import {
+  clearPendingResponders,
+  deleteResponder,
+  getResponderPerformance,
+  listPendingResponders,
+  registerCandidateResponder,
+} from '../lib/api'
 import { usePoll } from '../hooks/usePoll'
 import {
   availabilityMeta,
@@ -27,7 +32,6 @@ import {
   humaniseFlag,
   OUTCOME_OPTIONS,
   outcomeLabel,
-  tierMeta,
 } from '../lib/urdu'
 import type { OutcomeConfirmer, OutcomeType, PerformanceRecord, Responder } from '../lib/types'
 import {
@@ -109,6 +113,8 @@ function VerificationGate({
   const [checks, setChecks] = useState<Record<string, string[]>>({})
   const [verifier, setVerifier] = useState(DEFAULT_VERIFIER)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [seeding, setSeeding] = useState(false)
+  const [clearing, setClearing] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
 
   const pending = pendingPoll.data ?? []
@@ -121,6 +127,64 @@ function VerificationGate({
         : [...current, item]
       return { ...prev, [responderId]: next }
     })
+  }
+
+  async function handleSeedCandidate() {
+    setSeeding(true)
+    setFailure(null)
+    try {
+      const seedNum = Math.floor(100 + Math.random() * 900)
+      const names = [
+        'Hamza Tariq (حمزہ طارق)',
+        'Bilal Ahmed (بلال احمد)',
+        'Fatima Noor (فاطمہ نور)',
+        'Usman Ghani (عثمان غنی)',
+      ]
+      const randomName = names[Math.floor(Math.random() * names.length)]
+      await registerCandidateResponder({
+        name: randomName,
+        village: 'VILLAGE-A',
+        phone_number: `+92 300 555${seedNum}`,
+        linked_bhu_id: 'BHU-001',
+        training_completed: true,
+        training_org: 'Punjab Emergency Services (Rescue 1122)',
+      })
+      await pendingPoll.refresh()
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause)
+      setFailure(`Failed to seed candidate: ${message}`)
+    } finally {
+      setSeeding(false)
+    }
+  }
+
+  async function handleClearPending() {
+    setClearing(true)
+    setFailure(null)
+    try {
+      await clearPendingResponders()
+      setChecks({})
+      await pendingPoll.refresh()
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause)
+      setFailure(`Failed to clear candidates: ${message}`)
+    } finally {
+      setClearing(false)
+    }
+  }
+
+  async function handleDeleteCandidate(responderId: string) {
+    setBusyId(responderId)
+    setFailure(null)
+    try {
+      await deleteResponder(responderId)
+      await pendingPoll.refresh()
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause)
+      setFailure(`Failed to delete candidate: ${message}`)
+    } finally {
+      setBusyId(null)
+    }
   }
 
   async function verify(responderId: string) {
@@ -150,9 +214,29 @@ function VerificationGate({
     <Card
       title="Candidate Responder Verification"
       titleUr="امیدوار کی تصدیق"
-      subtitle="Module 7 gate — a candidate is not dispatch-eligible until a trainer or BHU signs off the equipment inspection."
+      subtitle="Candidate verification gate — volunteers require BHU staff sign-off and equipment inspection before activation."
       right={
         <div className="flex items-center gap-2">
+          <Pill
+            variant="cyan"
+            size="sm"
+            onClick={handleSeedCandidate}
+            disabled={seeding || clearing}
+            title="Populate an unverified candidate for demo verification"
+          >
+            {seeding ? <Spinner className="h-3 w-3" /> : '➕ Seed Unverified Candidate'}
+          </Pill>
+          {pending.length > 0 && (
+            <Pill
+              variant="danger"
+              size="sm"
+              onClick={handleClearPending}
+              disabled={clearing || seeding}
+              title="Clear all pending unverified candidates"
+            >
+              {clearing ? <Spinner className="h-3 w-3" /> : '🗑️ Clear Pending Candidates'}
+            </Pill>
+          )}
           <Tag tone={pending.length > 0 ? 'cyan' : 'mint'}>
             {pending.length} pending
           </Tag>
@@ -163,7 +247,7 @@ function VerificationGate({
       }
       panel
     >
-      <div className="mb-3 flex flex-wrap items-end gap-3">
+      <div className="mb-4 flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5">
         <div>
           <label className="label" htmlFor="verifier">
             Verifying actor
@@ -175,42 +259,43 @@ function VerificationGate({
             onChange={(e) => setVerifier(e.target.value)}
           />
         </div>
-        <p className="max-w-md text-[11px] text-ash/75">
-          Recorded as <span className="font-mono text-ash">verified_by</span> on the
-          responder and stamped with the current time.
+        <p className="max-w-md text-[11px] text-slate-500">
+          Recorded as <span className="font-mono font-semibold text-slate-700">verified_by</span> on the
+          responder and stamped with the sign-off timestamp.
         </p>
       </div>
 
       {failure && (
         <div className="mb-3">
-          <ErrorNote code="INVALID_VERIFICATION" message={failure} />
+          <ErrorNote code="VERIFICATION_ALERT" message={failure} />
         </div>
       )}
 
       {!pendingPoll.loaded && pendingPoll.error === null ? (
-        <div className="flex items-center gap-2 py-6 text-xs text-ash">
+        <div className="flex items-center gap-2 py-6 text-xs text-slate-500">
           <Spinner /> Loading candidate registry…
         </div>
       ) : pending.length === 0 ? (
         <EmptyState
           title="No candidates awaiting verification"
           titleUr="تصدیق کے لیے کوئی امیدوار نہیں"
-          message={
-            pendingPoll.error
-              ? `Registry query failed: ${pendingPoll.error.code} — ${pendingPoll.error.message}`
-              : 'Every registered responder is already verified. Register a candidate via POST /api/v1/responders/register to exercise this gate.'
+          message="Every registered responder is currently verified. Click 'Seed Unverified Candidate' above to test the candidate verification gate."
+          action={
+            <Pill variant="cyan" size="sm" onClick={handleSeedCandidate} disabled={seeding}>
+              ➕ Seed Unverified Candidate
+            </Pill>
           }
         />
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] border-collapse text-left">
+        <div className="overflow-x-auto rounded-2xl border border-slate-200">
+          <table className="w-full min-w-[720px] border-collapse text-left bg-white">
             <thead>
-              <tr className="border-b border-iris-border">
-                {['Responder', 'Village', 'Training', 'Equipment inspection', ''].map(
+              <tr className="border-b border-slate-200 bg-slate-50">
+                {['Responder', 'Village / BHU', 'Training', 'Equipment inspection', 'Action'].map(
                   (h) => (
                     <th
                       key={h}
-                      className="px-3 py-2 text-[10px] font-medium uppercase tracking-wider text-ash"
+                      className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-600"
                     >
                       {h}
                     </th>
@@ -225,41 +310,41 @@ function VerificationGate({
                 return (
                   <tr
                     key={r.responder_id}
-                    className="border-b border-iris-border/55 last:border-0"
+                    className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors"
                   >
-                    <td className="px-3 py-3 align-top">
-                      <p className="text-sm font-medium tracking-tight text-pearl">
+                    <td className="px-4 py-3 align-top">
+                      <p className="text-sm font-bold tracking-tight text-slate-900">
                         {r.name}
                       </p>
-                      <p className="font-mono text-[10px] text-ash">
+                      <p className="font-mono text-[10px] text-slate-500">
                         {r.responder_id}
                       </p>
                       <span
-                        className={`mt-1 inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] ${avMeta.bg} ${avMeta.border} ${avMeta.text}`}
+                        className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700"
                       >
                         {avMeta.en}
                       </span>
                     </td>
-                    <td className="px-3 py-3 align-top">
-                      <p className="text-xs text-pearl">{r.village}</p>
-                      <p className="font-mono text-[10px] text-ash">
+                    <td className="px-4 py-3 align-top">
+                      <p className="text-xs font-semibold text-slate-800">{r.village}</p>
+                      <p className="font-mono text-[10px] text-slate-500">
                         {r.linked_bhu_id}
                       </p>
                       {r.phone_number && (
-                        <p className="font-mono text-[10px] text-ash/75">
+                        <p className="font-mono text-[10px] text-slate-500">
                           {r.phone_number}
                         </p>
                       )}
                     </td>
-                    <td className="px-3 py-3 align-top">
-                      <p className="text-xs text-pearl">
+                    <td className="px-4 py-3 align-top">
+                      <p className="text-xs font-semibold text-slate-800">
                         {r.training_completed ? 'Completed' : 'Not recorded'}
                       </p>
                       {r.training_org && (
-                        <p className="text-[10px] text-ash">{r.training_org}</p>
+                        <p className="text-[10px] text-slate-500">{r.training_org}</p>
                       )}
                     </td>
-                    <td className="px-3 py-3 align-top">
+                    <td className="px-4 py-3 align-top">
                       <div className="flex flex-col gap-1.5">
                         {EQUIPMENT_ITEMS.map((item) => {
                           const checked = selected.includes(item.value)
@@ -272,12 +357,12 @@ function VerificationGate({
                                 type="checkbox"
                                 checked={checked}
                                 onChange={() => toggle(r.responder_id, item.value)}
-                                className="h-3.5 w-3.5 rounded-full accent-mint-vital"
+                                className="h-3.5 w-3.5 rounded-full accent-emerald-600"
                               />
-                              <span className={checked ? 'text-mint-vital' : 'text-ash'}>
+                              <span className={checked ? 'text-emerald-700 font-semibold' : 'text-slate-600'}>
                                 {item.label_en}
                               </span>
-                              <span dir="rtl" className="font-urdu text-[12px] text-ash/70">
+                              <span dir="rtl" className="font-urdu text-[12px] text-slate-400">
                                 {item.label_ur}
                               </span>
                             </label>
@@ -285,22 +370,35 @@ function VerificationGate({
                         })}
                       </div>
                     </td>
-                    <td className="px-3 py-3 align-top">
-                      <Pill
-                        variant="mint"
-                        size="sm"
-                        onClick={() => void verify(r.responder_id)}
-                        disabled={busyId === r.responder_id}
-                        className="whitespace-nowrap"
-                      >
-                        {busyId === r.responder_id ? (
-                          <Spinner className="h-3 w-3" />
-                        ) : (
-                          'Verify & Activate Responder'
-                        )}
-                      </Pill>
-                      <p className="mt-1 text-[10px] text-ash/65 tabular-nums">
-                        {selected.length}/{EQUIPMENT_ITEMS.length} checked
+                    <td className="px-4 py-3 align-top">
+                      <div className="flex flex-col gap-1.5">
+                        <Pill
+                          variant="mint"
+                          size="sm"
+                          onClick={() => void verify(r.responder_id)}
+                          disabled={busyId === r.responder_id}
+                          className="whitespace-nowrap"
+                        >
+                          {busyId === r.responder_id ? (
+                            <Spinner className="h-3 w-3" />
+                          ) : (
+                            'Verify & Activate'
+                          )}
+                        </Pill>
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteCandidate(r.responder_id)}
+                          disabled={busyId === r.responder_id}
+                          className="inline-flex items-center justify-center gap-1 rounded-full border border-rose-200 bg-rose-50/80 px-2.5 py-1 text-[11px] font-medium text-rose-700 hover:bg-rose-100 transition-colors"
+                          title="Remove this candidate"
+                        >
+                          <span>✕</span>
+                          <span>Remove</span>
+                          <span dir="rtl" className="font-urdu text-[11px]">(حذف کریں)</span>
+                        </button>
+                      </div>
+                      <p className="mt-1 text-[10px] text-slate-500 tabular-nums">
+                        {selected.length}/{EQUIPMENT_ITEMS.length} items checked
                       </p>
                     </td>
                   </tr>
@@ -339,7 +437,6 @@ function ClosureGate({
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<{ counted: boolean } | null>(null)
 
-  const meta = tierMeta(incident?.severity_tier ?? null)
   const countsTowardMetrics = confirmer === 'bhu_staff'
 
   async function submit() {
@@ -351,7 +448,6 @@ function ClosureGate({
       closed_by_id: actor.trim() || undefined,
     })
     setBusy(false)
-    // outcome_recorded is null exactly when the fraud gate refused to count it.
     setResult(
       res ? { counted: (res as { outcome_recorded?: unknown }).outcome_recorded != null } : null,
     )
@@ -363,7 +459,7 @@ function ClosureGate({
         <EmptyState
           title="No active incident to close"
           titleUr="بند کرنے کے لیے کوئی واقعہ نہیں"
-          message="Report an emergency first. Closure writes the outcome, releases the responder back to available, and — only for BHU-verified sign-off — contributes Module 5 metrics."
+          message="Report an emergency first. Closure writes the outcome, releases the responder back to available, and — only for BHU-verified sign-off — contributes to accountability metrics."
         />
       </Card>
     )
@@ -380,12 +476,16 @@ function ClosureGate({
       <div className="flex flex-col gap-4">
         {/* Active incident detail */}
         <div
-          className={`rounded-card border px-4 py-3 ${meta.bg} ${meta.border}`}
+          className={`rounded-2xl border p-4 ${
+            incident.severity_tier === 'critical'
+              ? 'border-rose-200 bg-rose-50/70 text-rose-950'
+              : 'border-sky-200 bg-sky-50/70 text-sky-950'
+          }`}
         >
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="font-mono text-xs text-ash">{incident.incident_id}</p>
-              <p className="mt-0.5 text-sm font-semibold tracking-tight text-pearl">
+              <p className="font-mono text-xs font-semibold opacity-70">{incident.incident_id}</p>
+              <p className="mt-0.5 text-sm font-bold tracking-tight">
                 {incident.gps_location.village_id} · reported{' '}
                 {formatClock(incident.timestamp_reported)}
               </p>
@@ -405,20 +505,20 @@ function ClosureGate({
 
           <div className="mt-2.5 flex flex-wrap gap-1.5">
             {incident.injury_type_flags.map((f) => (
-              <span key={f} className="tag normal-case tracking-normal border-iris-border bg-iris-canvas/50 text-ash">
+              <span key={f} className="tag normal-case tracking-normal border-slate-200 bg-white text-slate-700">
                 {humaniseFlag(f)}
               </span>
             ))}
           </div>
 
           {incident.outcome && (
-            <p className="mt-2.5 text-xs text-pearl">
+            <p className="mt-2.5 text-xs font-semibold text-slate-800">
               Recorded outcome:{' '}
-              <span className="text-mint-vital">{outcomeLabel(incident.outcome).en}</span>
-              <span dir="rtl" className="ml-2 font-urdu text-ash">
+              <span className="text-emerald-700 font-bold">{outcomeLabel(incident.outcome).en}</span>
+              <span dir="rtl" className="ml-2 font-urdu text-slate-600">
                 {outcomeLabel(incident.outcome).ur}
               </span>
-              <span className="ml-2 font-mono text-[10px] text-ash">
+              <span className="ml-2 font-mono text-[10px] text-slate-500">
                 confirmed_by={incident.outcome_confirmed_by ?? '—'}
               </span>
             </p>
@@ -444,7 +544,7 @@ function ClosureGate({
                 </option>
               ))}
             </select>
-            <p dir="rtl" className="mt-1 text-[12px] text-ash font-urdu leading-6">
+            <p dir="rtl" className="mt-1 text-[12px] text-slate-500 font-urdu leading-6">
               {outcomeLabel(outcome).ur}
             </p>
           </div>
@@ -467,7 +567,7 @@ function ClosureGate({
               ))}
             </select>
             <p
-              className={`mt-1 text-[10px] ${countsTowardMetrics ? 'text-mint-vital' : 'text-tier-critical'}`}
+              className={`mt-1 text-[10px] font-medium ${countsTowardMetrics ? 'text-emerald-700' : 'text-rose-700'}`}
             >
               {CONFIRMER_OPTIONS.find((c) => c.value === confirmer)?.note}
             </p>
@@ -484,14 +584,13 @@ function ClosureGate({
               disabled={closed}
               onChange={(e) => setActor(e.target.value)}
             />
-            <p className="mt-1 text-[10px] text-ash/70">
-              Sent as <span className="font-mono">closed_by_id</span> — the audit
-              trail identity, distinct from the confirmer role above.
+            <p className="mt-1 text-[10px] text-slate-500">
+              Sent as <span className="font-mono font-semibold">closed_by_id</span> for the audit trail.
             </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 pt-1">
           <Pill
             variant={countsTowardMetrics ? 'mint' : 'danger'}
             size="lg"
@@ -511,7 +610,7 @@ function ClosureGate({
           </Pill>
 
           {closed && (
-            <span className="inline-flex items-center gap-2 text-xs text-mint-vital">
+            <span className="inline-flex items-center gap-2 text-xs font-semibold text-emerald-700">
               <StatusDot tone="mint" /> Record is immutable — closure already signed off.
             </span>
           )}
@@ -519,14 +618,14 @@ function ClosureGate({
 
         {result && !closed && (
           <div
-            className={`rounded-card border px-4 py-2.5 text-xs ${
+            className={`rounded-2xl border p-3 text-xs font-medium ${
               result.counted
-                ? 'border-mint-vital/50 bg-mint-vital/10 text-mint-vital'
-                : 'border-tier-critical/50 bg-tier-critical/10 text-tier-critical'
+                ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                : 'border-rose-300 bg-rose-50 text-rose-800'
             }`}
           >
             {result.counted
-              ? 'Module 5 recorded this outcome — points/metrics awarded only on BHU-verified closure.'
+              ? 'Accountability system recorded this outcome — verified only on BHU staff closure.'
               : 'Fraud gate held: outcome_recorded is null, so this closure contributes nothing to accountability metrics.'}
           </div>
         )}
@@ -553,7 +652,6 @@ function AccountabilityScorecard({
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  // Adopt the incident's assigned responder as soon as one exists.
   useEffect(() => {
     if (defaultResponderId) setSelectedId(defaultResponderId)
   }, [defaultResponderId])
@@ -608,7 +706,7 @@ function AccountabilityScorecard({
     <Card
       title="Live Accountability Scorecard"
       titleUr="کارکردگی ریکارڈ"
-      subtitle="Module 5 — factual operational metrics only. No composite score, no tier, no ranking: scoring well must never outrank helping."
+      subtitle="Operational reliability metrics and response history."
       right={
         <div className="flex items-center gap-2">
           <select
@@ -643,29 +741,29 @@ function AccountabilityScorecard({
           titleUr="کارکردگی ریکارڈ دستیاب نہیں"
           message={
             loading
-              ? 'Fetching the Module 5 record…'
-              : 'Select a responder above. Metrics are recomputed from BHU-confirmed closures and the Module 3 dispatch audit trail.'
+              ? 'Fetching the performance record…'
+              : 'Select a responder above. Metrics are recomputed from BHU-confirmed closures and the dispatch audit trail.'
           }
         />
       ) : (
         <div className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center gap-3">
             <span
-              className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold tracking-tight ${
+              className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-bold tracking-tight ${
                 flagTone === 'mint'
-                  ? 'border-mint-vital/55 bg-mint-vital/12 text-mint-vital animate-pulse-ring-mint'
+                  ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
                   : flagTone === 'critical'
-                    ? 'border-tier-critical/55 bg-tier-critical/12 text-tier-critical'
-                    : 'border-clinical-cyan/55 bg-clinical-cyan/12 text-clinical-cyan'
+                    ? 'border-rose-300 bg-rose-50 text-rose-800'
+                    : 'border-sky-300 bg-sky-50 text-sky-800'
               }`}
             >
-              <StatusDot tone={flagTone} pulse={flagTone === 'mint'} />
+              <StatusDot tone={flagTone} />
               reliability flag: {perf.status_flag}
             </span>
-            <span className="font-mono text-xs text-ash">{perf.responder_id}</span>
+            <span className="font-mono text-xs font-semibold text-slate-500">{perf.responder_id}</span>
           </div>
 
-          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Metric
               label="Acceptance rate"
               value={perf.dispatch_metrics.acceptance_rate_pct.toFixed(1)}
@@ -695,27 +793,27 @@ function AccountabilityScorecard({
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-card border border-iris-border bg-iris-canvas/45 px-4 py-3">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
               <p className="label">Verified incidents responded to</p>
               <p className="metric-value">{perf.incidents_responded_to}</p>
-              <p className="mt-1 text-[10px] text-ash/70">
+              <p className="mt-1 text-[10px] text-slate-500">
                 BHU-confirmed closures only — self-reported completions are excluded.
               </p>
             </div>
 
-            <div className="rounded-card border border-iris-border bg-iris-canvas/45 px-4 py-3">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
               <p className="label">Incidents by outcome</p>
               {outcomeBreakdown.length === 0 ? (
-                <p className="text-xs text-ash/70">No verified outcomes yet.</p>
+                <p className="text-xs text-slate-500">No verified outcomes yet.</p>
               ) : (
                 <div className="flex flex-wrap gap-2">
                   {outcomeBreakdown.map(([key, count]) => (
                     <span
                       key={key}
-                      className="tag normal-case tracking-normal border-iris-border bg-iris-shadow text-ash"
+                      className="tag normal-case tracking-normal border-slate-200 bg-white text-slate-700"
                     >
                       {outcomeLabel(key).en}
-                      <span className="ml-1 font-semibold text-pearl tabular-nums">
+                      <span className="ml-1 font-bold text-slate-900 tabular-nums">
                         {count as number}
                       </span>
                     </span>

@@ -1,11 +1,8 @@
 /**
  * Live Polling Urdu Feed — persistent right-panel widget.
  *
- * Renders the `updates` array from
- * GET /api/v1/emergency/incident/{id}/timeline (polled every 2.5s by the
- * cockpit) as a vertical step progress bar. The backend already localises each
- * update into `message_urdu`, so that string is authoritative; STAGE_META only
- * supplies the English gloss and a fallback for unlocalised stages.
+ * Renders the `updates` array from GET /api/v1/emergency/incident/{id}/timeline
+ * with pure high-contrast Cloud White (#ffffff) headline and Pearl (#f4f4f6 / text-slate-200) subtext.
  */
 
 import { useCockpit } from '../state/CockpitContext'
@@ -30,34 +27,35 @@ export function TimelineFeed() {
   const isClosed = timeline?.status === 'closed'
 
   return (
-    <div className="card flex min-h-0 flex-1 flex-col">
-      <header className="flex items-start justify-between gap-3 px-5 pt-4 pb-3">
+    <div className="card flex min-h-0 flex-1 flex-col overflow-hidden">
+      {/* ---------------- High-Contrast Live Status Header ---------------- */}
+      <header className="flex items-start justify-between gap-3 px-5 pt-4 pb-3.5 border-b border-slate-700/60 bg-[#16165c]">
         <div className="min-w-0">
-          <h2 className="text-[15px] font-semibold tracking-tight text-pearl">
+          <h2 className="text-[15px] font-bold tracking-tight text-white">
             Live Status
-            <span dir="rtl" className="ml-2 text-[13px] font-normal text-ash font-urdu">
+            <span dir="rtl" className="ml-2 text-[13px] font-medium text-white font-urdu">
               براہِ راست صورتحال
             </span>
           </h2>
-          <p className="mt-0.5 text-xs text-ash/85">
+          <p className="mt-0.5 text-xs text-slate-200">
             {incidentId ? (
               <>
-                <span className="font-mono text-pearl">{incidentId}</span>
+                <span className="font-mono font-bold text-white">{incidentId}</span>
                 {' · '}
-                {status.en}
-                <span dir="rtl" className="ml-1.5 font-urdu">
+                <span className="text-slate-100 font-medium">{status.en}</span>
+                <span dir="rtl" className="ml-1.5 font-urdu text-slate-200">
                   {status.ur}
                 </span>
               </>
             ) : (
-              'No incident being tracked'
+              <span className="text-slate-200">No incident being tracked</span>
             )}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {polling && (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-clinical-cyan/45 bg-clinical-cyan/10 px-2.5 py-1 text-[10px] uppercase tracking-wider text-clinical-cyan">
-              <StatusDot tone="cyan" pulse /> live
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-400/50 bg-sky-950/60 px-2.5 py-1 text-[10px] uppercase font-bold tracking-wider text-sky-300">
+              <StatusDot tone="cyan" /> live
             </span>
           )}
           {!backendOnline && <Tag tone="critical">feed stalled</Tag>}
@@ -66,10 +64,10 @@ export function TimelineFeed() {
 
       {/* Real-time condition badges */}
       {(coverageGap || escalated || ambulance) && (
-        <div className="flex flex-wrap gap-2 px-5 pb-3">
+        <div className="flex flex-wrap gap-2 px-5 py-2.5 bg-slate-50 border-b border-slate-200">
           {coverageGap && (
-            <span className="tag border-iris-glow bg-iris-pulse/25 text-pearl shadow-glow normal-case tracking-normal">
-              <StatusDot tone="critical" pulse />
+            <span className="tag border-rose-200 bg-rose-50 text-rose-700 normal-case tracking-normal font-semibold">
+              <StatusDot tone="critical" />
               Coverage Gap
               <span dir="rtl" className="font-urdu text-[12px] normal-case">
                 کوریج کا خلا
@@ -77,7 +75,8 @@ export function TimelineFeed() {
             </span>
           )}
           {escalated && (
-            <span className="tag border-tier-critical/60 bg-tier-critical/15 text-tier-critical normal-case tracking-normal animate-pulse-ring-critical">
+            <span className="tag border-rose-300 bg-rose-100 text-rose-800 font-semibold normal-case tracking-normal">
+              <StatusDot tone="critical" />
               Mid-Incident Escalated
               <span dir="rtl" className="font-urdu text-[12px] normal-case">
                 حالت بگڑ گئی
@@ -85,7 +84,7 @@ export function TimelineFeed() {
             </span>
           )}
           {ambulance && (
-            <span className="tag border-clinical-cyan/60 bg-clinical-cyan/15 text-clinical-cyan normal-case tracking-normal">
+            <span className="tag border-sky-300 bg-sky-100 text-sky-800 font-semibold normal-case tracking-normal">
               <AmbulanceIcon />
               Ambulance Requested
               <span dir="rtl" className="font-urdu text-[12px] normal-case">
@@ -96,7 +95,7 @@ export function TimelineFeed() {
         </div>
       )}
 
-      <div className="hairline-top min-h-0 flex-1 overflow-y-auto px-5 py-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 bg-white">
         {!incidentId ? (
           <EmptyState
             title="Waiting for a report"
@@ -114,28 +113,26 @@ export function TimelineFeed() {
             }
           />
         ) : (
-          <ol className="relative">
+          <ol className="relative pl-1">
             {/* Vertical progress rail */}
             <span
               aria-hidden="true"
-              className="absolute left-[7px] top-2 bottom-2 w-px bg-iris-border"
+              className="absolute left-[8px] top-2 bottom-2 w-0.5 bg-slate-200"
             />
             {updates.map((u, i) => (
               <TimelineRow
                 key={u.update_id ?? `${u.stage}-${i}`}
                 update={u}
-                isLast={i === updates.length - 1}
-                closed={isClosed}
               />
             ))}
 
-            {/* Pending next-step placeholder keeps the rail visually alive. */}
+            {/* Pending next-step placeholder */}
             {!isClosed && (
               <li className="relative flex gap-3.5 pb-1 pl-0">
-                <span className="relative z-10 mt-1.5 h-3.5 w-3.5 shrink-0 rounded-full border border-iris-border bg-iris-canvas">
-                  <span className="absolute inset-[3px] rounded-full bg-clinical-cyan/60 animate-pulse" />
+                <span className="relative z-10 mt-1.5 h-3.5 w-3.5 shrink-0 rounded-full border border-slate-300 bg-slate-100 flex items-center justify-center">
+                  <span className="h-1.5 w-1.5 rounded-full bg-sky-500 opacity-80" />
                 </span>
-                <p className="pt-1 text-[11px] italic text-ash/70">
+                <p className="pt-0.5 text-[11px] italic text-slate-500">
                   Polling for the next update…
                 </p>
               </li>
@@ -149,12 +146,8 @@ export function TimelineFeed() {
 
 function TimelineRow({
   update,
-  isLast,
-  closed,
 }: {
   update: ReporterUpdate
-  isLast: boolean
-  closed: boolean
 }) {
   const meta = stageMeta(update.stage)
   const tone = meta.tone
@@ -167,52 +160,42 @@ function TimelineRow({
       <span
         className={`relative z-10 mt-1 h-3.5 w-3.5 shrink-0 rounded-full border-2 ${
           tone === 'mint'
-            ? 'border-mint-vital bg-mint-vital/25'
+            ? 'border-emerald-500 bg-emerald-100'
             : tone === 'critical'
-              ? 'border-tier-critical bg-tier-critical/25'
-              : 'border-clinical-cyan bg-clinical-cyan/25'
+              ? 'border-rose-500 bg-rose-100'
+              : 'border-sky-500 bg-sky-100'
         }`}
-      >
-        {(isLast && !closed) || tone === 'critical' ? (
-          <span
-            className={`absolute -inset-1 rounded-full ${
-              tone === 'critical'
-                ? 'animate-pulse-ring-critical'
-                : 'animate-pulse-ring'
-            }`}
-          />
-        ) : null}
-      </span>
+      />
 
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-3">
-          <span className="text-[10px] font-medium uppercase tracking-wider text-ash">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
             {meta.label_en}
           </span>
           <time
-            className="shrink-0 font-mono text-[10px] tabular-nums text-ash/80"
+            className="shrink-0 font-mono text-[10px] tabular-nums text-slate-400"
             dateTime={update.timestamp}
           >
             {formatClock(update.timestamp)}
           </time>
         </div>
 
-        {/* High-contrast Urdu message — the primary content of the feed. */}
+        {/* High-contrast Urdu message */}
         <p
           dir="rtl"
-          className={`mt-1 text-[15px] leading-8 font-urdu ${
+          className={`mt-1 text-[15px] leading-7 font-urdu ${
             tone === 'critical'
-              ? 'text-tier-critical'
+              ? 'text-rose-700 font-bold'
               : tone === 'mint'
-                ? 'text-mint-vital'
-                : 'text-pearl'
+                ? 'text-emerald-700 font-semibold'
+                : 'text-slate-800 font-medium'
           }`}
         >
           {message}
         </p>
 
         {update.update_id && (
-          <p className="mt-0.5 font-mono text-[10px] text-ash/55">
+          <p className="mt-0.5 font-mono text-[10px] text-slate-400">
             {update.update_id}
             {update.severity_tier ? ` · ${update.severity_tier}` : ''}
           </p>

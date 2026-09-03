@@ -1,8 +1,8 @@
 /**
  * Impilo Clinical Observatory primitives.
  *
- * Every interactive element is pill-geometry (rounded-full); every container is
- * a 24px or 32px-radius iris-shadow card bounded by a 1px iris hairline.
+ * Inverted white-card surface palette with high-contrast slate text on
+ * midnight deep iris canvas. Solid static status dots per UI directive.
  */
 
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
@@ -35,26 +35,26 @@ export function Card({
   return (
     <section className={`${panel ? 'card-panel' : 'card'} ${className}`}>
       {(title || right) && (
-        <header className="flex items-start justify-between gap-4 px-5 pt-4 pb-3">
+        <header className="flex items-start justify-between gap-4 px-5 pt-4 pb-3 border-b border-slate-100">
           <div className="min-w-0">
             {title && (
-              <h2 className="text-[15px] font-semibold tracking-tight text-pearl truncate">
+              <h2 className="text-[15px] font-bold tracking-tight text-slate-900 truncate">
                 {title}
               </h2>
             )}
             {titleUr && (
-              <p dir="rtl" className="text-[13px] text-ash leading-7">
+              <p dir="rtl" className="text-[13px] text-slate-500 font-urdu leading-7">
                 {titleUr}
               </p>
             )}
             {subtitle && (
-              <p className="text-xs text-ash/85 mt-0.5">{subtitle}</p>
+              <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>
             )}
           </div>
           {right && <div className="shrink-0 flex items-center gap-2">{right}</div>}
         </header>
       )}
-      <div className={title || right ? 'px-5 pb-5' : 'p-5'}>{children}</div>
+      <div className={title || right ? 'px-5 pb-5 pt-4' : 'p-5'}>{children}</div>
     </section>
   )
 }
@@ -119,12 +119,11 @@ export function Tag({
   className?: string
 }) {
   const tones: Record<string, string> = {
-    cyan: 'text-clinical-cyan border-clinical-cyan/45 bg-clinical-cyan/10',
-    mint: 'text-mint-vital border-mint-vital/45 bg-mint-vital/10',
-    critical: 'text-tier-critical border-tier-critical/45 bg-tier-critical/10',
-    ash: 'text-ash border-iris-border bg-iris-canvas/50',
-    pulse:
-      'text-clinical-cyan border-clinical-cyan/60 bg-clinical-cyan/15 animate-pulse-ring',
+    cyan: 'text-sky-700 border-sky-200 bg-sky-50',
+    mint: 'text-emerald-700 border-emerald-200 bg-emerald-50',
+    critical: 'text-rose-700 border-rose-200 bg-rose-50',
+    ash: 'text-slate-600 border-slate-200 bg-slate-100',
+    pulse: 'text-sky-700 border-sky-300 bg-sky-50',
   }
   return <span className={`tag ${tones[tone]} ${className}`}>{children}</span>
 }
@@ -143,11 +142,34 @@ export function TierBadge({
   const sizing =
     size === 'lg' ? 'px-4 py-2 text-sm' : size === 'sm' ? 'px-2.5 py-1 text-[10px]' : 'px-3.5 py-1.5 text-xs'
 
+  const tierStyles: Record<string, { bg: string; border: string; text: string; dot: string }> = {
+    critical: {
+      bg: 'bg-rose-50',
+      border: 'border-rose-200',
+      text: 'text-rose-700',
+      dot: 'bg-rose-600',
+    },
+    moderate: {
+      bg: 'bg-sky-50',
+      border: 'border-sky-200',
+      text: 'text-sky-700',
+      dot: 'bg-sky-600',
+    },
+    minor: {
+      bg: 'bg-slate-100',
+      border: 'border-slate-200',
+      text: 'text-slate-700',
+      dot: 'bg-slate-500',
+    },
+  }
+
+  const currentStyle = tierStyles[tier ?? 'moderate'] ?? tierStyles.moderate
+
   return (
     <span
-      className={`inline-flex items-center gap-2 rounded-full border font-semibold uppercase tracking-wider ${meta.bg} ${meta.border} ${meta.text} ${sizing}`}
+      className={`inline-flex items-center gap-2 rounded-full border font-semibold uppercase tracking-wider ${currentStyle.bg} ${currentStyle.border} ${currentStyle.text} ${sizing}`}
     >
-      <span className={`h-2 w-2 rounded-full ${meta.dot} ${meta.pulse}`} />
+      <span className={`h-2 w-2 rounded-full ${currentStyle.dot}`} />
       {meta.label_en}
       {showTierNo && (
         <span className="font-medium opacity-70 normal-case tracking-normal">
@@ -163,7 +185,7 @@ export function UrduChip({ children }: { children: ReactNode }) {
   return (
     <span
       dir="rtl"
-      className="inline-block rounded-full border border-iris-border bg-iris-canvas/60 px-3 py-1 text-[13px] text-pearl font-urdu leading-6"
+      className="inline-block rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-[13px] text-slate-800 font-urdu leading-6"
     >
       {children}
     </span>
@@ -176,7 +198,6 @@ export function UrduChip({ children }: { children: ReactNode }) {
 
 export function StatusDot({
   tone,
-  pulse = false,
   className = '',
 }: {
   tone: 'mint' | 'cyan' | 'critical' | 'ash'
@@ -184,22 +205,14 @@ export function StatusDot({
   className?: string
 }) {
   const tones: Record<string, string> = {
-    mint: 'bg-mint-vital',
-    cyan: 'bg-clinical-cyan',
-    critical: 'bg-tier-critical',
-    ash: 'bg-ash',
-  }
-  const pulses: Record<string, string> = {
-    mint: 'animate-pulse-ring-mint',
-    cyan: 'animate-pulse-ring',
-    critical: 'animate-pulse-ring-critical',
-    ash: '',
+    mint: 'bg-emerald-500',
+    cyan: 'bg-sky-500',
+    critical: 'bg-rose-500',
+    ash: 'bg-slate-400',
   }
   return (
     <span
-      className={`inline-block h-2.5 w-2.5 rounded-full ${tones[tone]} ${
-        pulse ? pulses[tone] : ''
-      } ${className}`}
+      className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 ${tones[tone]} ${className}`}
     />
   )
 }
@@ -261,21 +274,21 @@ export function Metric({
   hint?: string
 }) {
   const tones: Record<string, string> = {
-    cyan: 'text-clinical-cyan',
-    mint: 'text-mint-vital',
-    critical: 'text-tier-critical',
-    pearl: 'text-pearl',
+    cyan: 'text-sky-600',
+    mint: 'text-emerald-600',
+    critical: 'text-rose-600',
+    pearl: 'text-slate-800',
   }
   return (
-    <div className="rounded-full border border-iris-border bg-iris-canvas/45 px-4 py-2.5">
-      <div className="text-[10px] uppercase tracking-wider text-ash">{label}</div>
+    <div className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2.5">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{label}</div>
       <div
-        className={`text-lg font-semibold tracking-tighter tabular-nums ${tones[tone]}`}
+        className={`text-lg font-bold tracking-tighter tabular-nums ${tones[tone]}`}
       >
         {value}
         {unit && <span className="ml-0.5 text-xs font-medium opacity-70">{unit}</span>}
       </div>
-      {hint && <div className="text-[10px] text-ash/75">{hint}</div>}
+      {hint && <div className="text-[10px] text-slate-500">{hint}</div>}
     </div>
   )
 }
@@ -296,16 +309,16 @@ export function EmptyState({
   action?: ReactNode
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-card border border-dashed border-iris-border bg-iris-canvas/35 px-6 py-10 text-center">
+    <div className="flex flex-col items-center justify-center gap-3 rounded-card border border-dashed border-slate-200 bg-slate-50/70 px-6 py-10 text-center">
       <div>
-        <p className="text-sm font-semibold tracking-tight text-pearl">{title}</p>
+        <p className="text-sm font-bold tracking-tight text-slate-800">{title}</p>
         {titleUr && (
-          <p dir="rtl" className="text-[13px] text-ash font-urdu leading-7">
+          <p dir="rtl" className="text-[13px] text-slate-500 font-urdu leading-7">
             {titleUr}
           </p>
         )}
       </div>
-      {message && <p className="max-w-sm text-xs text-ash/85">{message}</p>}
+      {message && <p className="max-w-sm text-xs text-slate-500">{message}</p>}
       {action}
     </div>
   )
@@ -319,8 +332,8 @@ export function ErrorNote({
   message: string
 }) {
   return (
-    <div className="rounded-card border border-tier-critical/45 bg-tier-critical/10 px-4 py-3">
-      <p className="text-xs font-semibold text-tier-critical">
+    <div className="rounded-card border border-rose-200 bg-rose-50 px-4 py-3">
+      <p className="text-xs font-semibold text-rose-700">
         {code ? `${code} — ` : ''}
         {message}
       </p>
