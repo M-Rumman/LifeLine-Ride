@@ -1,0 +1,1 @@
+FastAPI HTTP server exposing Modules 1–9 of the village emergency response network, with in-memory incident/responder state reconciled against PostgreSQL on startup and a stateful help-bot guidance session per incident.

@@ -302,3 +302,38 @@ def getResponderProfile(responder_id: str) -> Optional[dict]:
             "points_total": getattr(in_mem, "points_total", 0),
         }
     return None
+
+
+def clearPendingResponders() -> int:
+    """Delete all unverified candidate responders from PostgreSQL and in-memory registry."""
+    count = 0
+    try:
+        count = responder_model.clear_pending_responders_db()
+    except Exception as exc:
+        _warn(f"DB clear pending failed: {exc}")
+
+    # Remove from in-memory slice_runner.SEED_RESPONDERS
+    slice_runner.SEED_RESPONDERS = [
+        r for r in slice_runner.SEED_RESPONDERS
+        if getattr(r, "is_verified", False) is True
+    ]
+    _log(f"Cleared {count} pending candidate responders from DB and memory.")
+    return count
+
+
+def deleteCandidateResponder(responder_id: str) -> bool:
+    """Delete a single candidate responder from PostgreSQL and in-memory registry."""
+    deleted = False
+    try:
+        deleted = responder_model.delete_responder_db(responder_id)
+    except Exception as exc:
+        _warn(f"DB delete failed for {responder_id}: {exc}")
+
+    # Remove from in-memory slice_runner.SEED_RESPONDERS
+    slice_runner.SEED_RESPONDERS = [
+        r for r in slice_runner.SEED_RESPONDERS
+        if r.responder_id != responder_id
+    ]
+    _log(f"Deleted responder {responder_id} from registry.")
+    return deleted
+

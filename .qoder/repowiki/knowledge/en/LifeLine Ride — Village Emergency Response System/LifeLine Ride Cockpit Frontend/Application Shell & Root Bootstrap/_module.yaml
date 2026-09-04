@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: frontend/app_shell
+title: Application Shell & Root Bootstrap
+scope:
+    - frontend/src/App.tsx
+    - frontend/src/main.tsx
+    - frontend/src/index.css
+source_files: []
+depends_on: []
+related_to: []

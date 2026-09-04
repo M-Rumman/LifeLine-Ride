@@ -81,6 +81,7 @@ APP_VERSION = "1.0.0"
 # rest of the bootstrap: a missing/blank value falls back to localhost only,
 # never to "*" with credentials.
 _DEFAULT_ORIGINS = (
+    "http://localhost:3000,http://127.0.0.1:3000,"
     "http://localhost:5173,http://127.0.0.1:5173,"
     "http://localhost:4173,http://127.0.0.1:4173"
 )
@@ -271,11 +272,36 @@ else:
     _warn(f"Media directory missing ({_MEDIA_DIR}) — /media URLs will 404.")
 
 
+def ai_provider_snapshot() -> dict:
+    """Which AI stack the triage + help-bot pipelines will actually call.
+
+    The cockpit's status bar reports this so a presenter can see at a glance
+    whether the demo is about to burn live Gemini quota or serve from
+    `.triage_cache`. Read from the same env vars slice_runner reads — never
+    guessed — so the header cannot drift from the provider that really runs.
+    """
+    provider = slice_runner._ai_provider()
+    if provider == "dashscope":
+        models = {
+            "stt": os.environ.get("DASHSCOPE_STT_MODEL", "sensevoice-v1"),
+            "vision": os.environ.get("DASHSCOPE_VISION_MODEL", "qwen-vl-max"),
+            "classifier": os.environ.get("DASHSCOPE_CLASSIFIER_MODEL", "qwen-plus"),
+        }
+    else:
+        models = {
+            "stt": os.environ.get("GEMINI_STT_MODEL", "gemini-3.5-flash"),
+            "vision": os.environ.get("GEMINI_VISION_MODEL", "gemini-3.5-flash"),
+            "classifier": os.environ.get("GEMINI_CLASSIFIER_MODEL", "gemini-3.5-flash"),
+        }
+    return {"provider": provider, "models": models}
+
+
 @app.get("/health")
 def health() -> dict:
     """Liveness + a snapshot of the in-memory state the app is serving.
     Reports the live help-bot session count (routes/emergency.py documents
     that /health owns this number)."""
+    ai = ai_provider_snapshot()
     return {
         "status": "ok",
         "version": APP_VERSION,
@@ -284,6 +310,9 @@ def health() -> dict:
         "incidents_in_memory": len(slice_runner.INCIDENT_STORE),
         "helpbot_sessions": len(emergency._HELPBOT_SESSIONS),
         "cors_origins": CORS_ORIGINS,
+        "ai_provider": ai["provider"],
+        "ai_models": ai["models"],
+        "port": int(os.getenv("PORT", "5000")),
     }
 
 

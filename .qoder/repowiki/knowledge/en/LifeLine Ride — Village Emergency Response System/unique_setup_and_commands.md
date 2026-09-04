@@ -1,1 +1,1 @@
-Demo script in `DEMO_SCRIPT.md` walks through three flows — reporter registration via Urdu photo+voice, hands-free responder guidance with escalation, and BHU closure with points/coverage-gap analytics — using the backend against `mockdata` replay logs and cached audio.
+Demo and validation are driven by the scripts and artifacts under `DEMO_SCRIPT.md`, `step2 Spec Qoder-AI-Coding-Hands-on-Lab-Guide.md`, and the `mockdata/` replay logs rather than a single top-level build command.

@@ -1,10 +1,11 @@
 /**
  * Cockpit state container.
  *
- * The one architectural rule that matters here: `role` and `incidentId` are
- * independent pieces of state. Switching the top stepper changes ONLY `role`,
- * so all three views keep inspecting the exact same active incident and the
- * end-to-end loop reads as one continuous story.
+ * The one architectural rule that matters here: `route`/`role` and
+ * `incidentId` are independent pieces of state. Navigating between the
+ * gateway and the three role screens changes ONLY the view, so all of them
+ * keep inspecting the exact same active incident and the end-to-end loop
+ * reads as one continuous story.
  *
  * `incidentId` is cleared only by an explicit reset action, never as a
  * side-effect of navigation.
@@ -14,6 +15,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -44,6 +46,7 @@ import type {
   OutcomeConfirmer,
   OutcomeType,
   ReportResponse,
+  ReporterUpdate,
   Responder,
   TimelineResponse,
 } from '../lib/types'
@@ -56,14 +59,49 @@ export const ROLES: {
   label_en: string
   label_ur: string
 }[] = [
-  { id: 'reporter', step: 1, label_en: 'Reporter View', label_ur: 'رپورٹر' },
-  { id: 'responder', step: 2, label_en: 'Field Responder', label_ur: 'مددگار' },
-  { id: 'bhu', step: 3, label_en: 'BHU & Audit', label_ur: 'مرکزِ صحت' },
+  { id: 'reporter', step: 1, label_en: 'Report Emergency', label_ur: 'رپورٹ کریں' },
+  { id: 'responder', step: 2, label_en: 'Field Responder', label_ur: 'فرسٹ رسپانڈر' },
+  { id: 'bhu', step: 3, label_en: 'BHU Console', label_ur: 'بنیادی مرکز صحت' },
 ]
 
+// ---------------------------------------------------------------------------
+// Routing — hash-backed so the gateway and the three role screens are
+// deep-linkable and survive a reload, without pulling in a router dependency.
+// ---------------------------------------------------------------------------
+
+export type Route = '/' | '/report' | '/respond' | '/bhu'
+
+export const ROUTES: Route[] = ['/', '/report', '/respond', '/bhu']
+
+export const ROUTE_FOR_ROLE: Record<Role, Route> = {
+  reporter: '/report',
+  responder: '/respond',
+  bhu: '/bhu',
+}
+
+/** `'/'` maps to no role — the gateway is its own screen, not a role. */
+export const ROLE_FOR_ROUTE: Record<Route, Role | null> = {
+  '/': null,
+  '/report': 'reporter',
+  '/respond': 'responder',
+  '/bhu': 'bhu',
+}
+
+function routeFromHash(): Route {
+  const raw = window.location.hash.replace(/^#/, '') || '/'
+  return (ROUTES as string[]).includes(raw) ? (raw as Route) : '/'
+}
+
 const POLL_MS = Number(import.meta.env.VITE_POLL_MS ?? 2500)
-/** Full lifecycle record is heavier than the timeline feed — poll it slower. */
-const RECORD_POLL_MS = Math.max(POLL_MS * 2, 4000)
+/**
+ * Cadences the demo directive asks for: responders and the full lifecycle
+ * record every 3s, /health every 5s. The timeline feed stays at POLL_MS —
+ * it is the lightest endpoint and the one the judge watches closest, so it
+ * gets the tightest interval rather than the loosest.
+ */
+const RECORD_POLL_MS = Math.max(POLL_MS, 3000)
+const RESPONDERS_POLL_MS = 3000
+const HEALTH_POLL_MS = 5000
 
 // ---------------------------------------------------------------------------
 // Toasts
@@ -86,6 +124,15 @@ export interface CockpitValue {
   // Navigation
   role: Role
   setRole: (role: Role) => void
+  /** Active screen. `'/'` is the gateway; the other three map 1:1 to a role. */
+  route: Route
+  /** Moves the view AND keeps `role` in step when the target is a role screen. */
+  navigate: (route: Route) => void
+
+  // Language bilingual toggle ('ur' | 'en')
+  lang: 'ur' | 'en'
+  setLang: (lang: 'ur' | 'en') => void
+  toggleLang: () => void
 
   // The single shared active incident
   incidentId: string | null
@@ -121,6 +168,13 @@ export interface CockpitValue {
   }) => Promise<Responder | null>
   adoptIncident: (incidentId: string) => void
   resetDemo: () => void
+  /**
+   * Bumped by the header's Quick Demo button. ReporterView owns the form state
+   * this needs to drive, so the button signals instead of submitting — see
+   * runQuickDemo below for why.
+   */
+  quickDemoNonce: number
+  runQuickDemo: () => void
   refreshAll: () => Promise<void>
 
   // Help-bot transcript accumulated client-side for the conversation panel
@@ -157,10 +211,39 @@ let toastSeq = 0
 
 export function CockpitProvider({ children }: { children: ReactNode }) {
   const [role, setRoleState] = useState<Role>('reporter')
+  const [route, setRoute] = useState<Route>(routeFromHash)
+  const [lang, setLang] = useState<'ur' | 'en'>('ur')
   const [incidentId, setIncidentId] = useState<string | null>(null)
   const [lastReport, setLastReport] = useState<ReportResponse | null>(null)
   const [botTurns, setBotTurns] = useState<BotTurn[]>([])
   const [toasts, setToasts] = useState<Toast[]>([])
+  const [quickDemoNonce, setQuickDemoNonce] = useState(0)
+
+  // Normalise an unknown/empty hash on first paint. replaceState rather than
+  // an assignment so the landing screen does not add a back-button step.
+  useEffect(() => {
+    if (window.location.hash !== `#${route}`) {
+      window.history.replaceState(null, '', `#${route}`)
+    }
+    // Deliberately mount-only: `navigate` owns every later hash write.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Browser back/forward and hand-edited hashes drive the view.
+  useEffect(() => {
+    const onHashChange = () => {
+      const next = routeFromHash()
+      setRoute(next)
+      const mapped = ROLE_FOR_ROUTE[next]
+      if (mapped) setRoleState(mapped)
+    }
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
+
+  const toggleLang = useCallback(() => {
+    setLang((prev) => (prev === 'ur' ? 'en' : 'ur'))
+  }, [])
 
   const pushToast = useCallback((t: Omit<Toast, 'id'>) => {
     toastSeq += 1
@@ -197,13 +280,13 @@ export function CockpitProvider({ children }: { children: ReactNode }) {
   // -------------------------------------------------------------------------
 
   const healthPoll = usePoll<HealthResponse>(() => getHealth(), [], {
-    intervalMs: 10_000,
+    intervalMs: HEALTH_POLL_MS,
   })
 
   const respondersPoll = usePoll<Responder[]>(
     async () => (await listResponders()).responders,
     [],
-    { intervalMs: 10_000 },
+    { intervalMs: RESPONDERS_POLL_MS },
   )
 
   const timelinePoll = usePoll<TimelineResponse>(
@@ -227,12 +310,22 @@ export function CockpitProvider({ children }: { children: ReactNode }) {
   // Actions
   // -------------------------------------------------------------------------
 
+  const navigate = useCallback((next: Route) => {
+    setRoute(next)
+    const mapped = ROLE_FOR_ROUTE[next]
+    if (mapped) setRoleState(mapped)
+    if (window.location.hash !== `#${next}`) window.location.hash = next
+    // Each screen is a fresh single focus, not a continuation of the last one.
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [])
+
   const setRole = useCallback(
     (next: Role) => {
       // Role switch ONLY. incidentId is intentionally untouched.
       setRoleState(next)
+      navigate(ROUTE_FOR_ROLE[next])
     },
-    [],
+    [navigate],
   )
 
   const submitReport = useCallback(
@@ -360,11 +453,15 @@ export function CockpitProvider({ children }: { children: ReactNode }) {
           incident_id: incidentId,
           responder_transcript: transcript,
         })
+        const spokenText =
+          res.intent === 'out_of_scope'
+            ? 'معذرت، میں اس سوال کا جواب دینے کے لیے تربیت یافتہ نہیں ہوں۔ / Sorry, I am not trained to answer this question.'
+            : (res.spoken_text_urdu || 'معذرت، میں اس سوال کا جواب دینے کے لیے تربیت یافتہ نہیں ہوں۔ / Sorry, I am not trained to answer this question.')
         setBotTurns((prev) => [
           ...prev,
           {
             speaker: 'bot',
-            text: res.spoken_text_urdu,
+            text: spokenText,
             at: Date.now(),
             intent: res.intent,
             audioUrl: res.audio_url,
@@ -497,6 +594,18 @@ export function CockpitProvider({ children }: { children: ReactNode }) {
     ])
   }, [healthPoll, recordPoll, respondersPoll, timelinePoll])
 
+  /**
+   * Signal, don't submit. The report form's village / evidence-pair / GPS
+   * state all live in ReporterView, so a header button cannot build a valid
+   * `ReportInput` from here without duplicating that logic — and a duplicated
+   * copy would drift from the fixture alignment that makes triage
+   * deterministic. Bumping a counter lets ReporterView react to the signal
+   * and submit with its own live state instead.
+   */
+  const runQuickDemo = useCallback(() => {
+    setQuickDemoNonce((n) => n + 1)
+  }, [])
+
   // -------------------------------------------------------------------------
   // Derived
   // -------------------------------------------------------------------------
@@ -510,14 +619,47 @@ export function CockpitProvider({ children }: { children: ReactNode }) {
     return null
   }, [record, lastReport, incidentId])
 
+  const timeline: TimelineResponse | null = useMemo(() => {
+    if (timelinePoll.data) return timelinePoll.data
+    if (lastReport?.incident && lastReport.incident.incident_id === incidentId) {
+      const updates: ReporterUpdate[] =
+        lastReport.incident.reporter_updates && lastReport.incident.reporter_updates.length > 0
+          ? lastReport.incident.reporter_updates
+          : [
+              {
+                update_id: `UPD-${lastReport.incident.incident_id}-0`,
+                timestamp: lastReport.incident.timestamp_reported || new Date().toISOString(),
+                stage: 'reported',
+                message_urdu: 'آپ کی ایمرجنسی کی اطلاع موصول ہو چکی ہے۔ سسٹم قریبی رضاکار تلاش کر رہا ہے۔',
+                severity_tier: lastReport.incident.severity_tier,
+              },
+            ]
+      return {
+        incident_id: lastReport.incident.incident_id,
+        status: String(lastReport.dispatch?.status ?? 'reported'),
+        severity_tier: lastReport.incident.severity_tier,
+        assigned_responder: lastReport.incident.responder_assigned_id ?? null,
+        coverage_gap: lastReport.incident.coverage_gap ?? false,
+        mid_incident_escalated: lastReport.incident.mid_incident_escalated ?? false,
+        updates,
+      }
+    }
+    return null
+  }, [timelinePoll.data, lastReport, incidentId])
+
   const value = useMemo<CockpitValue>(
     () => ({
       role,
       setRole,
+      route,
+      navigate,
+      lang,
+      setLang,
+      toggleLang,
       incidentId,
       incident,
       record,
-      timeline: timelinePoll.data,
+      timeline,
       lastReport,
       responders: respondersPoll.data ?? [],
       health: healthPoll.data,
@@ -532,6 +674,8 @@ export function CockpitProvider({ children }: { children: ReactNode }) {
       verifyCandidate,
       adoptIncident,
       resetDemo,
+      quickDemoNonce,
+      runQuickDemo,
       refreshAll,
       botTurns,
       toasts,
@@ -541,10 +685,15 @@ export function CockpitProvider({ children }: { children: ReactNode }) {
     [
       role,
       setRole,
+      route,
+      navigate,
+      lang,
+      setLang,
+      toggleLang,
       incidentId,
       incident,
       record,
-      timelinePoll.data,
+      timeline,
       timelinePoll.fetching,
       recordPoll.fetching,
       lastReport,
@@ -560,6 +709,8 @@ export function CockpitProvider({ children }: { children: ReactNode }) {
       verifyCandidate,
       adoptIncident,
       resetDemo,
+      quickDemoNonce,
+      runQuickDemo,
       refreshAll,
       botTurns,
       toasts,

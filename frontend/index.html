@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#16165c" />
+    <meta name="theme-color" content="#0a0f1d" />
     <meta
       name="description"
       content="LifeLine Ride — Urdu-first village emergency response and dispatch cockpit"
@@ -11,15 +11,17 @@
     <title>LifeLine Ride — Emergency Cockpit</title>
 
     <!--
-      Urdu-first typography. Naskh is used for dashboard body text (legible at
-      small sizes); Nastaliq is reserved for large display headings. Both load
-      with display=swap so the cockpit renders instantly on a slow venue link
-      and falls back to system Urdu fonts when offline.
+      Bilingual typography stack.
+        English / numbers : Inter
+        Urdu body + heads : Noto Nastaliq Urdu, with Noto Sans Arabic as the
+                            legibility fallback where Nastaliq is unavailable.
+      All faces load with display=swap so the cockpit paints instantly on a
+      slow venue link and falls back to system fonts when offline.
     -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@400;500;600;700&family=Noto+Nastaliq+Urdu:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Nastaliq+Urdu:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
 

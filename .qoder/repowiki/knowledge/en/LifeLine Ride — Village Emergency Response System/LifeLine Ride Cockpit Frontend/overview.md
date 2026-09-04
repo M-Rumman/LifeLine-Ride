@@ -1,0 +1,1 @@
+Single-page React cockpit that wires role-based workflow views to a shared incident context, a persistent situation map, and a live Urdu timeline feed behind a Vite build.

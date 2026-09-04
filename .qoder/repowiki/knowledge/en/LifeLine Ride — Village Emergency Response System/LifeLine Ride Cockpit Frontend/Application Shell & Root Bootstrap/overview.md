@@ -1,0 +1,1 @@
+Bootstraps the React app, mounts it into #root under StrictMode, and renders the unified cockpit layout that switches between reporter, responder, and Bhu role views alongside a persistent situation map and timeline feed.

@@ -19,6 +19,13 @@
  *     the brief (`bhu_staff_01`) belongs in the separate `closed_by_id` field.
  *  6. Acceptance rate lives at `dispatch_metrics.acceptance_rate_pct`.
  *  7. `/health` is mounted at the app root, not under `/api/v1`.
+ *  8. The backend's real port is 5050 (repo-root `.env` PORT), not the 5000
+ *     the design brief assumed. Rather than hardcode either, requests are
+ *     SAME-ORIGIN by default and vite.config.ts proxies `/api`, `/health` and
+ *     `/media` to whatever port `.env` declares — so there is no CORS
+ *     preflight to fail mid-demo and no port to keep in sync by hand. Set
+ *     VITE_API_URL to an absolute origin to go back to direct cross-origin
+ *     calls (backend/main.py whitelists :3000, :5173 and :4173).
  */
 
 import type {
@@ -39,10 +46,17 @@ import type {
   TimelineResponse,
 } from './types'
 
-/** Backend origin. 5050 matches test_api_live.py's LIVE_TEST_PORT default. */
+/**
+ * Empty string = same-origin, i.e. every request is relative and served
+ * through the Vite proxy. An absolute VITE_API_URL switches to direct mode.
+ */
 export const API_BASE: string = (
-  import.meta.env.VITE_API_URL ?? 'http://localhost:5050'
+  import.meta.env.VITE_API_URL ?? ''
 ).replace(/\/+$/, '')
+
+/** What the status bar and error toasts should call the backend. */
+export const API_LABEL: string =
+  API_BASE || `${window.location.origin} → proxy`
 
 const API_V1 = `${API_BASE}/api/v1`
 
@@ -88,7 +102,7 @@ function transportError(cause: unknown): ApiRequestError {
   return new ApiRequestError(
     0,
     BACKEND_UNREACHABLE,
-    `Cannot reach the LifeLine backend at ${API_BASE}. ${detail}`,
+    `Cannot reach the LifeLine backend at ${API_LABEL}. ${detail}`,
   )
 }
 

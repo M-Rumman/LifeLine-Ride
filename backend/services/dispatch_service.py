@@ -112,6 +112,37 @@ def _warn(msg: str) -> None:
     print(f"  [DISPATCH WARN] {msg}")
 
 
+def _sync_store_snapshot(incident) -> Optional[dict]:
+    """Keep the INCIDENT_STORE record (written by Module 1's logIncident)
+    reflecting live dispatch state — an inspectable snapshot, not a second
+    store. Same discipline as help_bot_service._sync_store_snapshot.
+
+    Returns the synced store record, or None when the incident is not in the
+    store (e.g. a detached Incident rebuilt from the DB)."""
+    for record in slice_runner.INCIDENT_STORE:
+        if record["incident"].get("incident_id") == incident.incident_id:
+            record["incident"] = incident.model_dump()
+            record["dispatch_synced_at"] = _now_iso()
+            return record
+    return None
+
+
+def _db_upsert_incident(incident_id: str, incident) -> None:
+    """Write-through to PostgreSQL (non-fatal).
+
+    Mirrors incident_lifecycle_service._db_upsert. The model import is lazy so
+    a DB connection problem can never break Module 3 dispatch at import time."""
+    try:
+        from models.incident_model import upsert_incident_to_db
+        record = next(
+            (r for r in slice_runner.INCIDENT_STORE
+             if r["incident"].get("incident_id") == incident_id), None)
+        upsert_incident_to_db(record if record is not None
+                              else {"incident": incident.model_dump()})
+    except Exception as exc:  # noqa: BLE001 — persistence is best-effort here
+        _warn(f"DB write-through for dispatch update failed (non-fatal): {exc}")
+
+
 def _append_dispatch_event(incident, event: dict) -> None:
     """Append a timestamped event to incident.dispatch_events and sync the
     INCIDENT_STORE snapshot — same discipline as _sync_store_snapshot in
@@ -119,11 +150,7 @@ def _append_dispatch_event(incident, event: dict) -> None:
     event.setdefault("timestamp", _now_iso())
     incident.dispatch_events.append(event)
     # Sync INCIDENT_STORE so logIncident dumps carry the full trace.
-    for record in slice_runner.INCIDENT_STORE:
-        if record["incident"].get("incident_id") == incident.incident_id:
-            record["incident"] = incident.model_dump()
-            record["dispatch_synced_at"] = _now_iso()
-            break
+    _sync_store_snapshot(incident)
 
 
 def _get_incident(incident_id: str) -> Optional[slice_runner.Incident]:
@@ -477,6 +504,14 @@ def acknowledgeDispatch(incident_id: str, responder_id: str) -> None:
             "message_urdu": f"مددگار {responder_name} نے الرٹ قبول کر لیا ہے اور وہ جائے وقوعہ کی طرف روانہ ہیں۔",
             "severity_tier": incident.severity_tier,
         })
+        # Ordering fix: _append_dispatch_event above synced the snapshot BEFORE
+        # this reporter_update existed, so the acknowledgment never reached
+        # INCIDENT_STORE or PostgreSQL — GET /incident/{id}/timeline kept
+        # serving the pre-ack state and the reporter's feed never showed the
+        # responder accepting. Re-sync and write through, mirroring
+        # record_responder_arrival.
+        _sync_store_snapshot(incident)
+        _db_upsert_incident(incident_id, incident)
     _log(f"Responder {responder_id} acknowledged dispatch for {incident_id}.")
 
 

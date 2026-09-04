@@ -1,0 +1,1 @@
+React 18 + TypeScript + Vite 5 as the build/runtime; Leaflet 1.9 for the situation map; Tailwind CSS 3 with PostCSS/Autoprefixer for styling; Node scripts (`smoke-test.mjs`, `cors-check.mjs`) drive runtime smoke and CORS validation.

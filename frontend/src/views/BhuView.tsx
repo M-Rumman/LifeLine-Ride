@@ -1,7 +1,17 @@
 /**
- * View 3 — BHU & Audit (verification gate + outcome sign-off).
+ * View 3 — Dispatch & BHU panel of the three-panel demo cockpit.
  *
- * Contract notes:
+ * Layout for the demo directive:
+ *   top    -> full-width Leaflet situation map (incident pin, responder and
+ *             ambulance route vectors, village markers)
+ *   below  -> live dispatch facts + formal closure + performance scorecard
+ *
+ * The Module 7 candidate-verification gate is deliberately NOT mounted here:
+ * the demo directive excludes registration/verification UI, so Module 7 stays
+ * backend-only. `VerificationGate` remains in this file, exported and
+ * type-checked, for non-demo surfaces.
+ *
+ * Contract notes (unchanged by the redesign — these are backend facts):
  *   - POST /responders/{id}/verify needs { verified_by, equipment_checklist }
  *     with a NON-EMPTY checklist, else 400 INVALID_VERIFICATION.
  *   - POST /emergency/incident/{id}/close needs { outcome, confirmed_by,
@@ -9,7 +19,11 @@
  *     = "bhu_staff" | "responder"; the actor identity from the brief
  *     (`bhu_staff_01`) belongs in the separate free-text `closed_by_id`.
  *   - Accountability metrics are awarded ONLY when confirmed_by === "bhu_staff".
- *   - Seed Unverified Candidate button for instant on-demand demo verification.
+ *     That fraud gate is surfaced in the UI rather than hidden, per the project's
+ *     inspectable-decisions rule.
+ *   - `bhu_urgency` is only present on the POST /emergency/report response
+ *     (`dispatch.bhu_urgency`) — the incident record itself carries just the
+ *     boolean `bhu_notified`.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -32,8 +46,16 @@ import {
   humaniseFlag,
   OUTCOME_OPTIONS,
   outcomeLabel,
+  statusLabel,
 } from '../lib/urdu'
-import type { OutcomeConfirmer, OutcomeType, PerformanceRecord, Responder } from '../lib/types'
+import type {
+  OutcomeConfirmer,
+  OutcomeType,
+  PerformanceRecord,
+  ReportResponse,
+  Responder,
+} from '../lib/types'
+import { SituationMap } from '../components/SituationMap'
 import {
   Card,
   EmptyState,
@@ -55,37 +77,39 @@ export function BhuView() {
     record,
     lastReport,
     responders,
+    timeline,
     closeActiveIncident,
-    verifyCandidate,
     incidentId,
-    setRole,
   } = useCockpit()
 
   const assignedResponderId = incidentResponderId(record, lastReport)
 
   return (
-    <div className="flex flex-col gap-4">
-      <VerificationGate onVerified={verifyCandidate} />
+    <div className="flex flex-col gap-5">
+      {/* ================= Top half — situation map ================= */}
+      <SituationMap heightClass="h-[320px] xl:h-[440px]" />
 
-      <ClosureGate
-        incidentId={incidentId}
-        onClose={closeActiveIncident}
-        closed={Boolean(incident?.incident_closed_timestamp)}
-        incident={incident}
-      />
+      {/* ================= Bottom half — closure + scorecard ================= */}
+      {/* The Module 7 candidate-verification gate is deliberately NOT mounted:
+          the demo directive forbids registration/verification UI in the cockpit
+          (the backend module still exists, it simply has no demo surface). */}
+      <div className="flex flex-col gap-5">
+        <ClosureGate
+          incidentId={incidentId}
+          onClose={closeActiveIncident}
+          closed={Boolean(incident?.incident_closed_timestamp)}
+          incident={incident}
+          responders={responders}
+          assignedResponderId={assignedResponderId}
+          dispatch={lastReport?.dispatch ?? null}
+          status={timeline?.status ?? null}
+        />
 
-      <AccountabilityScorecard
-        responders={responders}
-        defaultResponderId={assignedResponderId}
-      />
-
-      <div className="flex flex-wrap gap-2 px-1">
-        <Pill variant="ghost" onClick={() => setRole('reporter')}>
-          ← Reporter View
-        </Pill>
-        <Pill variant="ghost" onClick={() => setRole('responder')}>
-          ← Responder View
-        </Pill>
+        <AccountabilityScorecard
+          responders={responders}
+          defaultResponderId={assignedResponderId}
+          refreshKey={incident?.incident_closed_timestamp ?? null}
+        />
       </div>
     </div>
   )
@@ -95,7 +119,12 @@ export function BhuView() {
 // Candidate responder verification
 // ===========================================================================
 
-function VerificationGate({
+/**
+ * Retained but NOT mounted in the demo cockpit: the demo directive excludes
+ * registration/verification UI (Module 7 stays backend-only). Exported so the
+ * component remains reachable for non-demo surfaces and type-checked.
+ */
+export function VerificationGate({
   onVerified,
 }: {
   onVerified: (p: {
@@ -196,7 +225,7 @@ function VerificationGate({
       return
     }
     if (!verifier.trim()) {
-      setFailure('A verifying actor id is required.')
+      setFailure('A verifying supervisor id is required.')
       return
     }
     setFailure(null)
@@ -212,202 +241,200 @@ function VerificationGate({
 
   return (
     <Card
-      title="Candidate Responder Verification"
+      title="Candidate Verification Gate"
       titleUr="امیدوار کی تصدیق"
-      subtitle="Candidate verification gate — volunteers require BHU staff sign-off and equipment inspection before activation."
-      right={
-        <div className="flex items-center gap-2">
+      right={<Tag tone={pending.length > 0 ? 'cyan' : 'mint'}>{pending.length} pending</Tag>}
+      panel
+    >
+      <div className="flex flex-col gap-4">
+        {/* ---- Toolbar ---- */}
+        <div className="flex flex-wrap items-center gap-2">
           <Pill
-            variant="cyan"
+            variant="primary"
             size="sm"
+            loading={seeding}
             onClick={handleSeedCandidate}
             disabled={seeding || clearing}
-            title="Populate an unverified candidate for demo verification"
+            title="Register an unverified candidate so the verification gate can be demonstrated"
           >
-            {seeding ? <Spinner className="h-3 w-3" /> : '➕ Seed Unverified Candidate'}
+            {!seeding && '+ Seed Candidate'}
           </Pill>
           {pending.length > 0 && (
             <Pill
               variant="danger"
               size="sm"
+              loading={clearing}
               onClick={handleClearPending}
               disabled={clearing || seeding}
               title="Clear all pending unverified candidates"
             >
-              {clearing ? <Spinner className="h-3 w-3" /> : '🗑️ Clear Pending Candidates'}
+              {!clearing && 'Clear Pending'}
             </Pill>
           )}
-          <Tag tone={pending.length > 0 ? 'cyan' : 'mint'}>
-            {pending.length} pending
-          </Tag>
-          <Pill variant="ghost" size="sm" onClick={() => void pendingPoll.refresh()}>
+          <Pill
+            variant="ghost"
+            size="sm"
+            onClick={() => void pendingPoll.refresh()}
+            disabled={!pendingPoll.loaded && pendingPoll.error === null}
+          >
             Refresh
           </Pill>
         </div>
-      }
-      panel
-    >
-      <div className="mb-4 flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5">
-        <div>
-          <label className="label" htmlFor="verifier">
-            Verifying actor
-          </label>
-          <input
-            id="verifier"
-            className="field w-56 font-mono text-xs"
-            value={verifier}
-            onChange={(e) => setVerifier(e.target.value)}
+
+        {/* ---- Verifying supervisor ---- */}
+        <div className="well flex flex-wrap items-end gap-x-4 gap-y-3 p-4">
+          <div>
+            <label className="label" htmlFor="verifier">
+              Verifying supervisor ID
+            </label>
+            <input
+              id="verifier"
+              className="field w-52 font-mono text-xs"
+              value={verifier}
+              onChange={(e) => setVerifier(e.target.value)}
+            />
+          </div>
+          <p className="max-w-xs text-[11px] leading-5 text-ink-muted">
+            Recorded as{' '}
+            <span className="font-mono font-semibold text-slate-300">verified_by</span> on the
+            responder and stamped with the sign-off timestamp.
+          </p>
+        </div>
+
+        {failure && <ErrorNote code="VERIFICATION_ALERT" message={failure} />}
+
+        {/* ---- Candidate checklist table ---- */}
+        {!pendingPoll.loaded && pendingPoll.error === null ? (
+          <div className="flex items-center gap-2 py-6 text-xs text-ink-muted">
+            <Spinner /> Loading candidate registry…
+          </div>
+        ) : pending.length === 0 ? (
+          <EmptyState
+            title="No candidates awaiting verification"
+            titleUr="تصدیق کے لیے کوئی امیدوار نہیں"
+            message="Every registered responder is currently verified. Seed a candidate above to exercise the verification gate."
+            action={
+              <Pill
+                variant="cyan"
+                size="sm"
+                loading={seeding}
+                onClick={handleSeedCandidate}
+                disabled={seeding}
+              >
+                {!seeding && '+ Seed Candidate'}
+              </Pill>
+            }
           />
-        </div>
-        <p className="max-w-md text-[11px] text-slate-500">
-          Recorded as <span className="font-mono font-semibold text-slate-700">verified_by</span> on the
-          responder and stamped with the sign-off timestamp.
-        </p>
-      </div>
-
-      {failure && (
-        <div className="mb-3">
-          <ErrorNote code="VERIFICATION_ALERT" message={failure} />
-        </div>
-      )}
-
-      {!pendingPoll.loaded && pendingPoll.error === null ? (
-        <div className="flex items-center gap-2 py-6 text-xs text-slate-500">
-          <Spinner /> Loading candidate registry…
-        </div>
-      ) : pending.length === 0 ? (
-        <EmptyState
-          title="No candidates awaiting verification"
-          titleUr="تصدیق کے لیے کوئی امیدوار نہیں"
-          message="Every registered responder is currently verified. Click 'Seed Unverified Candidate' above to test the candidate verification gate."
-          action={
-            <Pill variant="cyan" size="sm" onClick={handleSeedCandidate} disabled={seeding}>
-              ➕ Seed Unverified Candidate
-            </Pill>
-          }
-        />
-      ) : (
-        <div className="overflow-x-auto rounded-2xl border border-slate-200">
-          <table className="w-full min-w-[720px] border-collapse text-left bg-white">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50">
-                {['Responder', 'Village / BHU', 'Training', 'Equipment inspection', 'Action'].map(
-                  (h) => (
-                    <th
-                      key={h}
-                      className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-600"
-                    >
-                      {h}
-                    </th>
-                  ),
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {pending.map((r) => {
-                const selected = checks[r.responder_id] ?? []
-                const avMeta = availabilityMeta(r.current_availability_status)
-                return (
-                  <tr
-                    key={r.responder_id}
-                    className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors"
-                  >
-                    <td className="px-4 py-3 align-top">
-                      <p className="text-sm font-bold tracking-tight text-slate-900">
-                        {r.name}
-                      </p>
-                      <p className="font-mono text-[10px] text-slate-500">
-                        {r.responder_id}
-                      </p>
-                      <span
-                        className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700"
+        ) : (
+          <div className="overflow-x-auto rounded-2xl border border-slate-800">
+            <table className="w-full min-w-[620px] border-collapse bg-surface text-left">
+              <thead>
+                <tr className="border-b border-slate-800 bg-sunken">
+                  {['Responder', 'Village / BHU', 'Training', 'Kit inspection', 'Action'].map(
+                    (h) => (
+                      <th
+                        key={h}
+                        className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-ink-muted"
                       >
-                        {avMeta.en}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 align-top">
-                      <p className="text-xs font-semibold text-slate-800">{r.village}</p>
-                      <p className="font-mono text-[10px] text-slate-500">
-                        {r.linked_bhu_id}
-                      </p>
-                      {r.phone_number && (
-                        <p className="font-mono text-[10px] text-slate-500">
-                          {r.phone_number}
+                        {h}
+                      </th>
+                    ),
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {pending.map((r) => {
+                  const selected = checks[r.responder_id] ?? []
+                  const avMeta = availabilityMeta(r.current_availability_status)
+                  return (
+                    <tr
+                      key={r.responder_id}
+                      className="border-b border-slate-800/70 transition-colors last:border-0 hover:bg-sunken/60"
+                    >
+                      <td className="px-3 py-3 align-top">
+                        <p className="text-sm font-bold tracking-tight text-ink">{r.name}</p>
+                        <p className="font-mono text-[10px] text-ink-dim">{r.responder_id}</p>
+                        <span className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-slate-700 bg-slate-800/60 px-2 py-0.5 text-[10px] font-semibold text-slate-300">
+                          {avMeta.en}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 align-top">
+                        <p className="text-xs font-semibold text-slate-200">{r.village}</p>
+                        <p className="font-mono text-[10px] text-ink-dim">{r.linked_bhu_id}</p>
+                        {r.phone_number && (
+                          <p className="font-mono text-[10px] text-ink-dim">{r.phone_number}</p>
+                        )}
+                      </td>
+                      <td className="px-3 py-3 align-top">
+                        <p className="text-xs font-semibold text-slate-200">
+                          {r.training_completed ? 'Completed' : 'Not recorded'}
                         </p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 align-top">
-                      <p className="text-xs font-semibold text-slate-800">
-                        {r.training_completed ? 'Completed' : 'Not recorded'}
-                      </p>
-                      {r.training_org && (
-                        <p className="text-[10px] text-slate-500">{r.training_org}</p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 align-top">
-                      <div className="flex flex-col gap-1.5">
-                        {EQUIPMENT_ITEMS.map((item) => {
-                          const checked = selected.includes(item.value)
-                          return (
-                            <label
-                              key={item.value}
-                              className="flex cursor-pointer items-center gap-2 text-[11px]"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={() => toggle(r.responder_id, item.value)}
-                                className="h-3.5 w-3.5 rounded-full accent-emerald-600"
-                              />
-                              <span className={checked ? 'text-emerald-700 font-semibold' : 'text-slate-600'}>
+                        {r.training_org && (
+                          <p className="text-[10px] leading-4 text-ink-dim">{r.training_org}</p>
+                        )}
+                      </td>
+                      <td className="px-3 py-3 align-top">
+                        {/* Kit inspection pills — emerald means "inspected and
+                            present", which is exactly what emerald is reserved
+                            for. Unchecked pills stay inert slate. */}
+                        <div className="flex flex-wrap gap-1.5">
+                          {EQUIPMENT_ITEMS.map((item) => {
+                            const checked = selected.includes(item.value)
+                            return (
+                              <button
+                                key={item.value}
+                                type="button"
+                                onClick={() => toggle(r.responder_id, item.value)}
+                                aria-pressed={checked}
+                                title={`${item.label_en} · ${item.label_ur}`}
+                                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                                  checked
+                                    ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-200'
+                                    : 'border-slate-700 bg-sunken text-ink-dim hover:border-slate-600 hover:text-ink-muted'
+                                }`}
+                              >
+                                <span aria-hidden="true">{checked ? '✓' : '○'}</span>
                                 {item.label_en}
-                              </span>
-                              <span dir="rtl" className="font-urdu text-[12px] text-slate-400">
-                                {item.label_ur}
-                              </span>
-                            </label>
-                          )
-                        })}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 align-top">
-                      <div className="flex flex-col gap-1.5">
-                        <Pill
-                          variant="mint"
-                          size="sm"
-                          onClick={() => void verify(r.responder_id)}
-                          disabled={busyId === r.responder_id}
-                          className="whitespace-nowrap"
-                        >
-                          {busyId === r.responder_id ? (
-                            <Spinner className="h-3 w-3" />
-                          ) : (
-                            'Verify & Activate'
-                          )}
-                        </Pill>
-                        <button
-                          type="button"
-                          onClick={() => void handleDeleteCandidate(r.responder_id)}
-                          disabled={busyId === r.responder_id}
-                          className="inline-flex items-center justify-center gap-1 rounded-full border border-rose-200 bg-rose-50/80 px-2.5 py-1 text-[11px] font-medium text-rose-700 hover:bg-rose-100 transition-colors"
-                          title="Remove this candidate"
-                        >
-                          <span>✕</span>
-                          <span>Remove</span>
-                          <span dir="rtl" className="font-urdu text-[11px]">(حذف کریں)</span>
-                        </button>
-                      </div>
-                      <p className="mt-1 text-[10px] text-slate-500 tabular-nums">
-                        {selected.length}/{EQUIPMENT_ITEMS.length} items checked
-                      </p>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+                              </button>
+                            )
+                          })}
+                        </div>
+                        <p className="mt-1.5 text-[10px] tabular-nums text-ink-dim">
+                          {selected.length}/{EQUIPMENT_ITEMS.length} inspected
+                        </p>
+                      </td>
+                      <td className="px-3 py-3 align-top">
+                        <div className="flex flex-col items-start gap-1.5">
+                          <Pill
+                            variant="mint"
+                            size="sm"
+                            loading={busyId === r.responder_id}
+                            onClick={() => void verify(r.responder_id)}
+                            disabled={busyId !== null}
+                            className="whitespace-nowrap"
+                          >
+                            {busyId !== r.responder_id && 'Verify & Activate'}
+                          </Pill>
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteCandidate(r.responder_id)}
+                            disabled={busyId !== null}
+                            className="inline-flex items-center justify-center gap-1 rounded-full border border-rose-500/35 bg-rose-500/10 px-2.5 py-1 text-[11px] font-medium text-rose-200 transition-colors hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-45"
+                            title="Remove this candidate"
+                          >
+                            <span aria-hidden="true">✕</span>
+                            <span>Remove</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </Card>
   )
 }
@@ -416,11 +443,53 @@ function VerificationGate({
 // Incident closure & fraud-prevention gate
 // ===========================================================================
 
+/** One read-only dispatch fact in the View 3 incident header. */
+function FactCell({
+  labelEn,
+  labelUr,
+  value,
+  mono,
+  tone,
+}: {
+  labelEn: string
+  labelUr: string
+  value: string
+  mono?: string
+  tone: 'mint' | 'cyan' | 'critical' | 'ash'
+}) {
+  const toneClass =
+    tone === 'mint'
+      ? 'border-emerald-500/35 bg-emerald-500/10 text-emerald-200'
+      : tone === 'cyan'
+        ? 'border-sky-500/35 bg-sky-500/10 text-sky-200'
+        : tone === 'critical'
+          ? 'border-rose-500/40 bg-rose-500/10 text-rose-200'
+          : 'border-slate-700 bg-slate-800/60 text-slate-300'
+  return (
+    <div className={`min-w-0 rounded-xl border px-3 py-2 ${toneClass}`}>
+      <dt className="text-[10px] font-semibold uppercase tracking-wide opacity-80">
+        {labelEn}
+        <span dir="rtl" className="ml-1 font-urdu normal-case tracking-normal opacity-70">
+          {labelUr}
+        </span>
+      </dt>
+      <dd className="mt-0.5 truncate text-[13px] font-bold" title={value}>
+        {value}
+      </dd>
+      {mono && <dd className="truncate font-mono text-[10px] opacity-70">{mono}</dd>}
+    </div>
+  )
+}
+
 function ClosureGate({
   incidentId,
   incident,
   closed,
   onClose,
+  responders,
+  assignedResponderId,
+  dispatch,
+  status,
 }: {
   incidentId: string | null
   incident: ReturnType<typeof useCockpit>['incident']
@@ -430,6 +499,12 @@ function ClosureGate({
     confirmed_by: OutcomeConfirmer
     closed_by_id?: string
   }) => Promise<unknown | null>
+  responders: Responder[]
+  assignedResponderId: string | null
+  /** From the report response — the only place the backend exposes BHU urgency. */
+  dispatch: ReportResponse['dispatch'] | null
+  /** Live lifecycle stage from GET /incident/{id}/timeline. */
+  status: string | null
 }) {
   const [outcome, setOutcome] = useState<OutcomeType>('taken_to_bhu')
   const [confirmer, setConfirmer] = useState<OutcomeConfirmer>('bhu_staff')
@@ -438,6 +513,10 @@ function ClosureGate({
   const [result, setResult] = useState<{ counted: boolean } | null>(null)
 
   const countsTowardMetrics = confirmer === 'bhu_staff'
+
+  const assignedResponder = assignedResponderId
+    ? responders.find((r) => r.responder_id === assignedResponderId) ?? null
+    : null
 
   async function submit() {
     if (!incidentId) return
@@ -455,7 +534,7 @@ function ClosureGate({
 
   if (!incidentId || !incident) {
     return (
-      <Card title="Incident Closure & Audit" titleUr="واقعہ بند کرنا اور آڈٹ" panel>
+      <Card title="Formal Closure" titleUr="واقعہ بند کرنا" panel>
         <EmptyState
           title="No active incident to close"
           titleUr="بند کرنے کے لیے کوئی واقعہ نہیں"
@@ -465,32 +544,36 @@ function ClosureGate({
     )
   }
 
+  const isCritical = incident.severity_tier === 'critical'
+
   return (
     <Card
-      title="Incident Closure & Fraud Prevention Gate"
+      title="Formal Closure & Audit"
       titleUr="واقعہ بند کریں اور آڈٹ ریکارڈ کریں"
-      subtitle="Closed records are immutable — a second close attempt returns 409 ALREADY_CLOSED."
       right={<TierBadge tier={incident.severity_tier} size="sm" />}
+      className={isCritical && !closed ? 'border-rose-500/40' : ''}
       panel
     >
       <div className="flex flex-col gap-4">
-        {/* Active incident detail */}
+        {/* ---- Active incident detail ---- */}
         <div
           className={`rounded-2xl border p-4 ${
-            incident.severity_tier === 'critical'
-              ? 'border-rose-200 bg-rose-50/70 text-rose-950'
-              : 'border-sky-200 bg-sky-50/70 text-sky-950'
+            isCritical
+              ? 'border-rose-500/40 bg-rose-500/10'
+              : 'border-sky-500/35 bg-sky-500/10'
           }`}
         >
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="font-mono text-xs font-semibold opacity-70">{incident.incident_id}</p>
-              <p className="mt-0.5 text-sm font-bold tracking-tight">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-mono text-xs font-semibold text-ink-muted">
+                {incident.incident_id}
+              </p>
+              <p className="mt-0.5 text-sm font-bold tracking-tight text-ink">
                 {incident.gps_location.village_id} · reported{' '}
                 {formatClock(incident.timestamp_reported)}
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
               {closed ? (
                 <Tag tone="mint">closed {formatClock(incident.incident_closed_timestamp)}</Tag>
               ) : (
@@ -503,29 +586,89 @@ function ClosureGate({
             </div>
           </div>
 
-          <div className="mt-2.5 flex flex-wrap gap-1.5">
-            {incident.injury_type_flags.map((f) => (
-              <span key={f} className="tag normal-case tracking-normal border-slate-200 bg-white text-slate-700">
-                {humaniseFlag(f)}
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {incident.injury_type_flags.length === 0 ? (
+              <span className="tag border-slate-700 bg-slate-800/60 text-slate-300 normal-case tracking-normal">
+                no injury flags
               </span>
-            ))}
+            ) : (
+              incident.injury_type_flags.map((f) => (
+                <span
+                  key={f}
+                  className="tag border-slate-700 bg-slate-800/60 text-slate-300 normal-case tracking-normal"
+                >
+                  {humaniseFlag(f)}
+                </span>
+              ))
+            )}
           </div>
 
+          {/* ---- Live dispatch facts (View 3 of the demo brief) ----
+              Assigned responder, BHU notification + urgency, ambulance and the
+              live lifecycle stage — every value read from the polled API.
+              bhu_urgency only exists on the report response, which is why it
+              comes from `dispatch` and not from `incident`. */}
+          <dl className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-4">
+            <FactCell
+              labelEn="Assigned responder"
+              labelUr="مددگار"
+              value={assignedResponder?.name ?? 'unassigned'}
+              mono={assignedResponderId ?? undefined}
+              tone={assignedResponderId ? 'mint' : 'ash'}
+            />
+            <FactCell
+              labelEn="BHU notified"
+              labelUr="مرکزِ صحت کو اطلاع"
+              value={
+                incident.bhu_notified
+                  ? dispatch?.bhu?.name ?? 'yes'
+                  : 'no'
+              }
+              mono={
+                incident.bhu_notified
+                  ? `urgency=${dispatch?.bhu_urgency ?? 'unknown'}`
+                  : undefined
+              }
+              tone={
+                !incident.bhu_notified
+                  ? 'ash'
+                  : dispatch?.bhu_urgency === 'urgent'
+                    ? 'critical'
+                    : 'cyan'
+              }
+            />
+            <FactCell
+              labelEn="Ambulance"
+              labelUr="ایمبولینس"
+              value={incident.ambulance_requested ? 'requested' : 'not requested'}
+              tone={incident.ambulance_requested ? 'critical' : 'ash'}
+            />
+            <FactCell
+              labelEn="Status"
+              labelUr="حالت"
+              value={statusLabel(status).en}
+              mono={status ?? undefined}
+              tone={status === 'closed' ? 'mint' : 'cyan'}
+            />
+          </dl>
+
           {incident.outcome && (
-            <p className="mt-2.5 text-xs font-semibold text-slate-800">
+            <p className="mt-3 text-xs font-semibold text-slate-200">
               Recorded outcome:{' '}
-              <span className="text-emerald-700 font-bold">{outcomeLabel(incident.outcome).en}</span>
-              <span dir="rtl" className="ml-2 font-urdu text-slate-600">
+              <span className="font-bold text-emerald-300">
+                {outcomeLabel(incident.outcome).en}
+              </span>
+              <span dir="rtl" className="ml-2 font-urdu text-ink-muted">
                 {outcomeLabel(incident.outcome).ur}
               </span>
-              <span className="ml-2 font-mono text-[10px] text-slate-500">
+              <span className="ml-2 font-mono text-[10px] text-ink-dim">
                 confirmed_by={incident.outcome_confirmed_by ?? '—'}
               </span>
             </p>
           )}
         </div>
 
-        {/* Closure controls */}
+        {/* ---- Closure controls ---- */}
         <div className="grid gap-4 sm:grid-cols-3">
           <div>
             <label className="label" htmlFor="outcome">
@@ -544,7 +687,7 @@ function ClosureGate({
                 </option>
               ))}
             </select>
-            <p dir="rtl" className="mt-1 text-[12px] text-slate-500 font-urdu leading-6">
+            <p dir="rtl" className="mt-1 font-urdu text-[12px] leading-6 text-ink-muted">
               {outcomeLabel(outcome).ur}
             </p>
           </div>
@@ -567,7 +710,9 @@ function ClosureGate({
               ))}
             </select>
             <p
-              className={`mt-1 text-[10px] font-medium ${countsTowardMetrics ? 'text-emerald-700' : 'text-rose-700'}`}
+              className={`mt-1 text-[10px] font-medium leading-4 ${
+                countsTowardMetrics ? 'text-emerald-300' : 'text-rose-300'
+              }`}
             >
               {CONFIRMER_OPTIONS.find((c) => c.value === confirmer)?.note}
             </p>
@@ -575,7 +720,7 @@ function ClosureGate({
 
           <div>
             <label className="label" htmlFor="actor">
-              Sign-off actor
+              Verifying supervisor ID
             </label>
             <input
               id="actor"
@@ -584,22 +729,23 @@ function ClosureGate({
               disabled={closed}
               onChange={(e) => setActor(e.target.value)}
             />
-            <p className="mt-1 text-[10px] text-slate-500">
-              Sent as <span className="font-mono font-semibold">closed_by_id</span> for the audit trail.
+            <p className="mt-1 text-[10px] leading-4 text-ink-dim">
+              Sent as <span className="font-mono font-semibold text-ink-muted">closed_by_id</span>{' '}
+              for the audit trail.
             </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 pt-1">
+        {/* ---- Sign-off ---- */}
+        <div className="flex flex-wrap items-center gap-3 border-t border-slate-800 pt-4">
           <Pill
             variant={countsTowardMetrics ? 'mint' : 'danger'}
             size="lg"
+            loading={busy}
             onClick={submit}
             disabled={busy || closed}
           >
-            {busy ? (
-              <Spinner />
-            ) : (
+            {!busy && (
               <>
                 <span dir="rtl" className="font-urdu text-[15px] leading-7">
                   واقعہ بند کریں اور آڈٹ ریکارڈ کریں
@@ -610,18 +756,19 @@ function ClosureGate({
           </Pill>
 
           {closed && (
-            <span className="inline-flex items-center gap-2 text-xs font-semibold text-emerald-700">
+            <span className="inline-flex items-center gap-2 text-xs font-semibold text-emerald-300">
               <StatusDot tone="mint" /> Record is immutable — closure already signed off.
             </span>
           )}
         </div>
 
+        {/* ---- Fraud-gate verdict, surfaced rather than hidden ---- */}
         {result && !closed && (
           <div
-            className={`rounded-2xl border p-3 text-xs font-medium ${
+            className={`rounded-2xl border p-3.5 text-xs font-medium leading-5 ${
               result.counted
-                ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
-                : 'border-rose-300 bg-rose-50 text-rose-800'
+                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
+                : 'border-rose-500/40 bg-rose-500/10 text-rose-200'
             }`}
           >
             {result.counted
@@ -641,9 +788,17 @@ function ClosureGate({
 function AccountabilityScorecard({
   responders,
   defaultResponderId,
+  refreshKey,
 }: {
   responders: Responder[]
   defaultResponderId: string | null
+  /**
+   * Changes the moment the active incident closes (the closure timestamp), so
+   * the scorecard refetches immediately instead of waiting for a manual
+   * Reload — the demo needs the updated metrics on screen the instant the
+   * BHU signs off.
+   */
+  refreshKey?: string | null
 }) {
   const [selectedId, setSelectedId] = useState<string>(
     defaultResponderId ?? responders[0]?.responder_id ?? '',
@@ -679,7 +834,7 @@ function AccountabilityScorecard({
     return () => {
       cancelled = true
     }
-  }, [selectedId])
+  }, [selectedId, refreshKey])
 
   const reload = useCallback(() => {
     if (!selectedId) return
@@ -704,14 +859,13 @@ function AccountabilityScorecard({
 
   return (
     <Card
-      title="Live Accountability Scorecard"
+      title="Live Performance Scorecard"
       titleUr="کارکردگی ریکارڈ"
-      subtitle="Operational reliability metrics and response history."
       right={
         <div className="flex items-center gap-2">
           <select
             aria-label="Responder"
-            className="field-select py-1.5 text-xs"
+            className="field-select max-w-[190px] py-1.5 text-xs"
             value={selectedId}
             onChange={(e) => setSelectedId(e.target.value)}
           >
@@ -722,8 +876,8 @@ function AccountabilityScorecard({
               </option>
             ))}
           </select>
-          <Pill variant="ghost" size="sm" onClick={reload} disabled={loading}>
-            {loading ? <Spinner className="h-3 w-3" /> : 'Reload'}
+          <Pill variant="ghost" size="sm" loading={loading} onClick={reload} disabled={loading}>
+            {!loading && 'Reload'}
           </Pill>
         </div>
       }
@@ -751,19 +905,21 @@ function AccountabilityScorecard({
             <span
               className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-bold tracking-tight ${
                 flagTone === 'mint'
-                  ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                  ? 'border-emerald-500/45 bg-emerald-500/12 text-emerald-200'
                   : flagTone === 'critical'
-                    ? 'border-rose-300 bg-rose-50 text-rose-800'
-                    : 'border-sky-300 bg-sky-50 text-sky-800'
+                    ? 'border-rose-500/45 bg-rose-500/12 text-rose-200'
+                    : 'border-sky-500/45 bg-sky-500/12 text-sky-200'
               }`}
             >
               <StatusDot tone={flagTone} />
               reliability flag: {perf.status_flag}
             </span>
-            <span className="font-mono text-xs font-semibold text-slate-500">{perf.responder_id}</span>
+            <span className="font-mono text-xs font-semibold text-ink-dim">
+              {perf.responder_id}
+            </span>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Metric
               label="Acceptance rate"
               value={perf.dispatch_metrics.acceptance_rate_pct.toFixed(1)}
@@ -793,27 +949,27 @@ function AccountabilityScorecard({
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+            <div className="well p-4">
               <p className="label">Verified incidents responded to</p>
               <p className="metric-value">{perf.incidents_responded_to}</p>
-              <p className="mt-1 text-[10px] text-slate-500">
+              <p className="mt-1 text-[10px] leading-4 text-ink-dim">
                 BHU-confirmed closures only — self-reported completions are excluded.
               </p>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+            <div className="well p-4">
               <p className="label">Incidents by outcome</p>
               {outcomeBreakdown.length === 0 ? (
-                <p className="text-xs text-slate-500">No verified outcomes yet.</p>
+                <p className="text-xs text-ink-muted">No verified outcomes yet.</p>
               ) : (
-                <div className="flex flex-wrap gap-2">
+                <div className="mt-1 flex flex-wrap gap-2">
                   {outcomeBreakdown.map(([key, count]) => (
                     <span
                       key={key}
-                      className="tag normal-case tracking-normal border-slate-200 bg-white text-slate-700"
+                      className="tag border-slate-700 bg-slate-800/60 text-slate-300 normal-case tracking-normal"
                     >
                       {outcomeLabel(key).en}
-                      <span className="ml-1 font-bold text-slate-900 tabular-nums">
+                      <span className="ml-1 font-bold tabular-nums text-ink">
                         {count as number}
                       </span>
                     </span>

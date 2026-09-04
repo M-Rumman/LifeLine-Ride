@@ -146,6 +146,9 @@ export const STATUS_URDU: Record<string, { en: string; ur: string }> = {
   no_resources: { en: 'No resources', ur: 'وسائل دستیاب نہیں' },
   closed: { en: 'Closed', ur: 'بند' },
   acknowledged: { en: 'Acknowledged', ur: 'تصدیق شدہ' },
+  // Timeline status advances past the frozen dispatch decision once the
+  // responder checks in on scene (GET /incident/{id}/timeline).
+  arrived: { en: 'On scene', ur: 'جائے وقوعہ پر پہنچ گئے' },
 }
 
 export function statusLabel(status: string | null | undefined): {

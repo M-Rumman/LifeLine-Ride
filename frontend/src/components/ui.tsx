@@ -1,8 +1,14 @@
 /**
- * Impilo Clinical Observatory primitives.
+ * LifeLine Ride UI primitives — Rozgaar-pattern dark utility theme.
  *
- * Inverted white-card surface palette with high-contrast slate text on
- * midnight deep iris canvas. Solid static status dots per UI directive.
+ * Surface rules:
+ *   canvas #0a0f1d  ->  card #111827  ->  sunken well #0d1424
+ * Each step DOWN in that stack means "further from the viewer", so inputs,
+ * feeds and the chat log all sit in `.well` rather than on a lighter tile.
+ *
+ * Accent discipline: rose (#ef4444) is reserved for active critical
+ * emergencies and escalation banners; emerald (#10b981) is reserved for
+ * verified status and resolved incidents. Neither is used decoratively.
  */
 
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
@@ -29,32 +35,34 @@ export function Card({
   subtitle?: string
   right?: ReactNode
   className?: string
-  /** 32px radius instead of 24px for top-level containers. */
+  /** 20px radius instead of 16px for top-level containers. */
   panel?: boolean
 }) {
   return (
     <section className={`${panel ? 'card-panel' : 'card'} ${className}`}>
       {(title || right) && (
-        <header className="flex items-start justify-between gap-4 px-5 pt-4 pb-3 border-b border-slate-100">
+        <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 border-b border-slate-800 px-5 pt-6 pb-4 sm:px-8">
           <div className="min-w-0">
             {title && (
-              <h2 className="text-[15px] font-bold tracking-tight text-slate-900 truncate">
+              <h2 className="truncate text-[15px] font-bold tracking-tight text-ink">
                 {title}
               </h2>
             )}
             {titleUr && (
-              <p dir="rtl" className="text-[13px] text-slate-500 font-urdu leading-7">
+              <p dir="rtl" className="font-urdu text-[13px] leading-7 text-ink-muted">
                 {titleUr}
               </p>
             )}
-            {subtitle && (
-              <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>
-            )}
+            {subtitle && <p className="mt-1 text-xs leading-5 text-ink-muted">{subtitle}</p>}
           </div>
-          {right && <div className="shrink-0 flex items-center gap-2">{right}</div>}
+          {/* `min-w-0` + wrap, not `shrink-0`: a header with three or four
+              controls must fold instead of overflowing a half-width column. */}
+          {right && <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">{right}</div>}
         </header>
       )}
-      <div className={title || right ? 'px-5 pb-5 pt-4' : 'p-5'}>{children}</div>
+      <div className={title || right ? 'p-5 pt-4 sm:p-8 sm:pt-6' : 'p-5 sm:p-8'}>
+        {children}
+      </div>
     </section>
   )
 }
@@ -119,11 +127,11 @@ export function Tag({
   className?: string
 }) {
   const tones: Record<string, string> = {
-    cyan: 'text-sky-700 border-sky-200 bg-sky-50',
-    mint: 'text-emerald-700 border-emerald-200 bg-emerald-50',
-    critical: 'text-rose-700 border-rose-200 bg-rose-50',
-    ash: 'text-slate-600 border-slate-200 bg-slate-100',
-    pulse: 'text-sky-700 border-sky-300 bg-sky-50',
+    cyan: 'text-sky-300 border-sky-500/35 bg-sky-500/10',
+    mint: 'text-emerald-300 border-emerald-500/35 bg-emerald-500/10',
+    critical: 'text-rose-300 border-rose-500/35 bg-rose-500/10',
+    ash: 'text-slate-300 border-slate-700 bg-slate-800/60',
+    pulse: 'text-sky-300 border-sky-400/50 bg-sky-500/10',
   }
   return <span className={`tag ${tones[tone]} ${className}`}>{children}</span>
 }
@@ -144,21 +152,21 @@ export function TierBadge({
 
   const tierStyles: Record<string, { bg: string; border: string; text: string; dot: string }> = {
     critical: {
-      bg: 'bg-rose-50',
-      border: 'border-rose-200',
-      text: 'text-rose-700',
-      dot: 'bg-rose-600',
+      bg: 'bg-rose-500/12',
+      border: 'border-rose-500/40',
+      text: 'text-rose-300',
+      dot: 'bg-rose-500',
     },
     moderate: {
-      bg: 'bg-sky-50',
-      border: 'border-sky-200',
-      text: 'text-sky-700',
-      dot: 'bg-sky-600',
+      bg: 'bg-sky-500/12',
+      border: 'border-sky-500/40',
+      text: 'text-sky-300',
+      dot: 'bg-sky-500',
     },
     minor: {
-      bg: 'bg-slate-100',
-      border: 'border-slate-200',
-      text: 'text-slate-700',
+      bg: 'bg-slate-800/70',
+      border: 'border-slate-700',
+      text: 'text-slate-300',
       dot: 'bg-slate-500',
     },
   }
@@ -185,7 +193,7 @@ export function UrduChip({ children }: { children: ReactNode }) {
   return (
     <span
       dir="rtl"
-      className="inline-block rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-[13px] text-slate-800 font-urdu leading-6"
+      className="inline-block rounded-full border border-slate-700 bg-slate-800/60 px-3 py-1 text-[13px] text-slate-200 font-urdu leading-6"
     >
       {children}
     </span>
@@ -198,9 +206,12 @@ export function UrduChip({ children }: { children: ReactNode }) {
 
 export function StatusDot({
   tone,
+  pulse = false,
   className = '',
 }: {
   tone: 'mint' | 'cyan' | 'critical' | 'ash'
+  /** Breathing opacity for live indicators. Was declared-but-inert, which is
+   *  why callers reached for `className="animate-pulse"` instead. */
   pulse?: boolean
   className?: string
 }) {
@@ -208,11 +219,13 @@ export function StatusDot({
     mint: 'bg-emerald-500',
     cyan: 'bg-sky-500',
     critical: 'bg-rose-500',
-    ash: 'bg-slate-400',
+    ash: 'bg-slate-500',
   }
   return (
     <span
-      className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 ${tones[tone]} ${className}`}
+      className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 ${tones[tone]} ${
+        pulse ? 'animate-pulse' : ''
+      } ${className}`}
     />
   )
 }
@@ -237,7 +250,7 @@ export function Spinner({ className = 'h-4 w-4' }: { className?: string }) {
   )
 }
 
-/** Clinical-cyan audio wave shown while the help-bot line is playing. */
+/** Cyan audio wave shown while the help-bot line is playing. */
 export function AudioWave({ active = true }: { active?: boolean }) {
   return (
     <span className="inline-flex h-4 items-end gap-[3px]" aria-hidden="true">
@@ -274,21 +287,21 @@ export function Metric({
   hint?: string
 }) {
   const tones: Record<string, string> = {
-    cyan: 'text-sky-600',
-    mint: 'text-emerald-600',
-    critical: 'text-rose-600',
-    pearl: 'text-slate-800',
+    cyan: 'text-sky-400',
+    mint: 'text-emerald-400',
+    critical: 'text-rose-400',
+    pearl: 'text-slate-100',
   }
   return (
-    <div className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2.5">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{label}</div>
+    <div className="rounded-2xl border border-slate-800 bg-sunken px-4 py-3">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-muted">{label}</div>
       <div
         className={`text-lg font-bold tracking-tighter tabular-nums ${tones[tone]}`}
       >
         {value}
         {unit && <span className="ml-0.5 text-xs font-medium opacity-70">{unit}</span>}
       </div>
-      {hint && <div className="text-[10px] text-slate-500">{hint}</div>}
+      {hint && <div className="text-[10px] text-ink-dim">{hint}</div>}
     </div>
   )
 }
@@ -309,16 +322,16 @@ export function EmptyState({
   action?: ReactNode
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-card border border-dashed border-slate-200 bg-slate-50/70 px-6 py-10 text-center">
+    <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-slate-700 bg-sunken/60 px-6 py-10 text-center">
       <div>
-        <p className="text-sm font-bold tracking-tight text-slate-800">{title}</p>
+        <p className="text-sm font-bold tracking-tight text-ink">{title}</p>
         {titleUr && (
-          <p dir="rtl" className="text-[13px] text-slate-500 font-urdu leading-7">
+          <p dir="rtl" className="text-[13px] text-ink-muted font-urdu leading-7">
             {titleUr}
           </p>
         )}
       </div>
-      {message && <p className="max-w-sm text-xs text-slate-500">{message}</p>}
+      {message && <p className="max-w-sm text-xs text-ink-muted">{message}</p>}
       {action}
     </div>
   )
@@ -332,8 +345,8 @@ export function ErrorNote({
   message: string
 }) {
   return (
-    <div className="rounded-card border border-rose-200 bg-rose-50 px-4 py-3">
-      <p className="text-xs font-semibold text-rose-700">
+    <div className="rounded-2xl border border-rose-500/35 bg-rose-500/10 px-4 py-3">
+      <p className="text-xs font-semibold text-rose-300">
         {code ? `${code} — ` : ''}
         {message}
       </p>

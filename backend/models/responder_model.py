@@ -282,6 +282,38 @@ def list_responders_from_db(
         db.close()
 
 
+def clear_pending_responders_db() -> int:
+    """Delete all unverified candidate responders (is_verified=False) from DB."""
+    db = SessionLocal()
+    try:
+        count = db.query(ResponderRecord).filter(
+            ResponderRecord.is_verified == False  # noqa: E712
+        ).delete(synchronize_session=False)
+        db.commit()
+        return count
+    except Exception as exc:
+        db.rollback()
+        raise RuntimeError(f"clear_pending_responders_db failed: {exc}") from exc
+    finally:
+        db.close()
+
+
+def delete_responder_db(responder_id: str) -> bool:
+    """Delete a single responder by ID from PostgreSQL."""
+    db = SessionLocal()
+    try:
+        deleted = db.query(ResponderRecord).filter(
+            ResponderRecord.responder_id == responder_id
+        ).delete(synchronize_session=False)
+        db.commit()
+        return bool(deleted > 0)
+    except Exception as exc:
+        db.rollback()
+        raise RuntimeError(f"delete_responder_db failed for {responder_id}: {exc}") from exc
+    finally:
+        db.close()
+
+
 def update_responder_availability(responder_id: str, status: str) -> bool:
     """Narrow write-through of ONLY current_availability_status (+ updated_at)."""
     from sqlalchemy.dialects.postgresql import insert as pg_insert

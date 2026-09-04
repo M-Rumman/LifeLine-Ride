@@ -192,6 +192,7 @@ def report_emergency(
     reporter_id: Optional[str] = Form(None),
     photo_ref: Optional[str] = Form(None),
     voice_ref: Optional[str] = Form(None),
+    voice_transcript: Optional[str] = Form(None),
 ):
     """Register + triage + dispatch one emergency. Form-encoded because the
     field-app reports media refs alongside GPS; JSON validation errors map to
@@ -222,10 +223,17 @@ def report_emergency(
     incident = slice_runner.registerIncident(
         photo_ref.strip(), voice_ref.strip(), gps,
         reporter_id=(reporter_id or "REP-USER-001").strip())
+
+    # Attach live speech-to-text transcript if provided
+    if (voice_transcript or "").strip():
+        incident.voice_transcript = voice_transcript.strip()
+
     # Module 3 canonical entry (replaces legacy matchResponderAndBHU+dispatch):
     # match + notify + busy-mark + ack timer in one call.
     decision = dispatch_service.dispatchIncident(incident)
     record = slice_runner.logIncident(incident, decision)
+    if (voice_transcript or "").strip():
+        record["incident"]["voice_transcript"] = voice_transcript.strip()
 
     # Module 6.5: PostgreSQL archive (non-fatal — memory state commits first).
     db_persisted = True
@@ -321,8 +329,13 @@ def _session_transition(session: dict, to_state: str, trigger_type: str,
 
 def _create_session(incident_id: str, incident_dict: dict) -> dict:
     """First helpbot/step for an incident: rebuild the live Incident, route
-    its flags to a knowledge branch, and enter at step 1 (the HTTP caller has
-    already delivered the initial guidance text on the incident screen)."""
+    its flags to a knowledge branch, and enter at step 1.
+
+    NOTE: this only LOGS `step_started` for step 1 — the line itself is
+    delivered by the first `step_done` turn (see `step1_delivered` in
+    helpbot_step). Nothing else speaks it, so without that the greeting which
+    opens a session would advance straight to step 2 and step 1 would never be
+    heard over HTTP."""
     incident = slice_runner.Incident(**incident_dict)
     help_bot_service.register_incident(incident)
     branch_id, matched = help_bot_service.route_branch(
@@ -335,6 +348,7 @@ def _create_session(incident_id: str, incident_dict: dict) -> dict:
         "branch": branch,
         "state": "created",
         "step_index": 0,
+        "step1_delivered": False,
         "turns": [],
     }
     _session_transition(session, "initial_guidance", "branch_entered",
@@ -402,21 +416,41 @@ def helpbot_step(payload: HelpBotStepRequest):
         qa_entry_id = intent.get("qa_entry_id")
         escalation_signal = intent.get("escalation_signal")
 
-        if intent_name == help_bot_service.INTENT_STEP_DONE:
+        if not session.get("branch_matched", True):
+            _session_transition(session, session["state"],
+                                "unmapped_branch_fallback",
+                                "injury not in predefined branches; honest fallback")
+            spoken = help_bot_service.SHARED_LINES["out_of_scope_fallback"]
+
+        elif intent_name == help_bot_service.INTENT_STEP_DONE:
             steps = branch["steps"]
-            session["step_index"] += 1
-            if session["step_index"] < len(steps):
-                step = steps[session["step_index"]]
+            if steps and not session.get("step1_delivered", True):
+                # `_create_session` logged `step_started` for step 1 but never
+                # returned its line over HTTP. Speak it now instead of
+                # advancing, so the greeting that opens a session receives the
+                # FIRST aid step rather than silently skipping to step 2.
+                # Deterioration on turn 1 is unaffected: it classifies as
+                # `escalation` above and never reaches this branch.
+                session["step1_delivered"] = True
                 _session_transition(
                     session, "ongoing_monitor", "step_started",
-                    f"step {session['step_index'] + 1}/{len(steps)}: "
-                    f"{step['step_id']}")
-                spoken = step["line"]
+                    f"step 1/{len(steps)}: {steps[0]['step_id']} "
+                    f"(initial line delivered on first step_done turn)")
+                spoken = steps[0]["line"]
             else:
-                _session_transition(session, "ongoing_monitor",
-                                    "steps_complete",
-                                    "all scripted steps delivered")
-                spoken = help_bot_service.SHARED_LINES["session_complete_line"]
+                session["step_index"] += 1
+                if session["step_index"] < len(steps):
+                    step = steps[session["step_index"]]
+                    _session_transition(
+                        session, "ongoing_monitor", "step_started",
+                        f"step {session['step_index'] + 1}/{len(steps)}: "
+                        f"{step['step_id']}")
+                    spoken = step["line"]
+                else:
+                    _session_transition(session, "ongoing_monitor",
+                        "steps_complete",
+                        "all scripted steps delivered")
+                    spoken = help_bot_service.SHARED_LINES["session_complete_line"]
 
         elif intent_name == help_bot_service.INTENT_IN_SCOPE:
             entry = next((e for e in branch["qa_entries"]
@@ -627,6 +661,26 @@ def list_pending_responders(village_id: Optional[str] = None):
     }
 
 
+@router.delete("/responders/pending/clear")
+def clear_pending_responders():
+    """Delete all unverified candidate responders from DB and in-memory state."""
+    count = onboarding_service.clearPendingResponders()
+    return {
+        "status": "cleared",
+        "cleared_count": count,
+    }
+
+
+@router.delete("/responders/{responder_id}")
+def delete_responder(responder_id: str):
+    """Delete a single candidate responder by ID."""
+    deleted = onboarding_service.deleteCandidateResponder(responder_id)
+    return {
+        "status": "deleted" if deleted else "not_found",
+        "responder_id": responder_id,
+    }
+
+
 @router.get("/responders")
 def list_responders(
     village_id: Optional[str] = None,
@@ -689,6 +743,15 @@ def responder_arrived(payload: ResponderArrivedRequest):
         raise ApiError(500, "ARRIVAL_FAILED", f"Arrival check-in failed: {exc}")
 
 
+# Reporter-facing lifecycle stages that advance the timeline status past the
+# frozen Module 3 dispatch decision. "acknowledged" is the stage the demo
+# script calls "acked".
+_STAGE_TO_LIFECYCLE_STATUS = {
+    "responder_en_route": "acknowledged",
+    "responder_arrived": "arrived",
+}
+
+
 @router.get("/emergency/incident/{incident_id}/timeline")
 def get_incident_timeline(incident_id: str):
     """Dedicated endpoint for distressed reporter status tracking (Module 9).
@@ -703,8 +766,26 @@ def get_incident_timeline(incident_id: str):
 
     inc = record.get("incident", {})
     dispatch_status = record.get("dispatch_status")
+    updates = inc.get("reporter_updates") or []
+
+    # `dispatch_status` is frozen at the Module 3 decision, so on its own the
+    # reporter's feed would keep reading "dispatched" for the whole incident —
+    # the acknowledgment and the arrival would never show up as a stage change.
+    # Walk the updates backwards for the latest responder-lifecycle stage and
+    # let it advance the reported status. Only those two stages override: a
+    # coverage-gap dispatch must keep reporting escalated_bhu_only /
+    # no_responders_available rather than a stage it never reached.
+    live_stage = None
+    for update in reversed(updates):
+        mapped = _STAGE_TO_LIFECYCLE_STATUS.get(update.get("stage"))
+        if mapped is not None:
+            live_stage = mapped
+            break
+
     if inc.get("incident_closed_timestamp") is not None:
         current_status = "closed"
+    elif live_stage is not None:
+        current_status = live_stage
     elif dispatch_status is not None:
         current_status = dispatch_status
     elif inc.get("responder_assigned_id"):
@@ -721,7 +802,7 @@ def get_incident_timeline(incident_id: str):
         "assigned_responder": inc.get("responder_assigned_id"),
         "coverage_gap": bool(inc.get("coverage_gap", False)),
         "mid_incident_escalated": bool(inc.get("mid_incident_escalated", False)),
-        "updates": inc.get("reporter_updates") or [],
+        "updates": updates,
     }
 
 

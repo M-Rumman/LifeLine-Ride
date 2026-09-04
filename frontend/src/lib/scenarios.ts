@@ -125,6 +125,141 @@ export function scenarioById(id: string): Scenario | undefined {
   return SCENARIOS.find((s) => s.id === id)
 }
 
+/** Fixture owning this photo ref, if any — lets a photo preset pull in its
+ *  matching voice note so the cached pair completes. */
+export function scenarioByPhoto(photo: string): Scenario | null {
+  return SCENARIOS.find((s) => s.cache_backed && s.photo_ref === photo) ?? null
+}
+
+/** Fixture owning this voice ref, if any. */
+export function scenarioByVoice(voice: string): Scenario | null {
+  return SCENARIOS.find((s) => s.cache_backed && s.voice_ref === voice) ?? null
+}
+
+/**
+ * The fixture whose photo AND voice refs are BOTH currently selected.
+ *
+ * A hit means the backend serves triage from `.triage_cache` — instant,
+ * deterministic, zero Gemini quota. A miss means a live AI call whose verdict
+ * depends on whatever the photo actually shows.
+ */
+export function scenarioForMedia(photo: string, voice: string): Scenario | null {
+  return (
+    SCENARIOS.find(
+      (s) => s.cache_backed && s.photo_ref === photo && s.voice_ref === voice,
+    ) ?? null
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Condition text -> fixture resolution
+// ---------------------------------------------------------------------------
+
+/**
+ * Keyword table ordered to MIRROR backend `help_bot_service._BRANCH_KEYWORDS`
+ * (snakebite first, then fracture/crush, then heavy bleeding) so a phrase that
+ * could match two branches resolves identically on both sides of the wire.
+ *
+ * WHY THIS EXISTS: POST /emergency/report triages from `photo_ref` + `voice_ref`
+ * ONLY — the cache key is sha256("<photo_ref>|<voice_ref>") and
+ * `registerIncident` is called before `voice_transcript` is attached to the
+ * incident (backend/routes/emergency.py). Typed or dictated text therefore
+ * cannot influence the AI verdict directly; it can only select the media pair
+ * that carries the cached verdict. Sending a MISMATCHED pair (snake audio +
+ * finger photo) misses the cache, triggers a live call, and degrades to
+ * ['unclear_input','low_confidence_triage'] at tier 'moderate'.
+ */
+const SCENARIO_KEYWORDS: { scenario_id: string; keywords: string[] }[] = [
+  {
+    scenario_id: 'snakebite',
+    keywords: [
+      'سانپ', 'saanp', 'snake', 'زہریلا', 'زہر', 'venom', 'bite', 'ڈسا', 'ڈس',
+      'کاٹا',
+    ],
+  },
+  {
+    scenario_id: 'crush-fall',
+    keywords: [
+      'ہڈی', 'fracture', 'bone', 'ٹوٹ', 'کچل', 'crush', 'پتھر', 'گر گیا', 'ٹانگ',
+    ],
+  },
+  {
+    scenario_id: 'farm-machinery',
+    keywords: [
+      'مشین', 'machine', 'thresher', 'انگلی', 'finger', 'amput', 'خون',
+      'bleed', 'blood', 'زخم', 'wound', 'کاٹ',
+    ],
+  },
+]
+
+/** Resolve free Urdu/roman/English condition text to a cache-backed fixture. */
+export function matchScenario(text: string | null | undefined): Scenario | null {
+  const haystack = (text ?? '').toLowerCase()
+  if (!haystack.trim()) return null
+  for (const entry of SCENARIO_KEYWORDS) {
+    if (entry.keywords.some((k) => haystack.includes(k.toLowerCase()))) {
+      const hit = scenarioById(entry.scenario_id)
+      if (hit?.cache_backed) return hit
+    }
+  }
+  return null
+}
+
+// ---------------------------------------------------------------------------
+// Manual emergency presets (speech-service fallback)
+// ---------------------------------------------------------------------------
+
+export interface PresetPhrase {
+  id: string
+  label_ur: string
+  label_en: string
+  /** Fills the reporter's Urdu condition box verbatim. */
+  transcript_ur: string
+  /** Cache-backed fixture this phrase resolves to. */
+  scenario_id: string
+}
+
+/**
+ * One-tap fallbacks for when the browser's speech endpoint is unreachable —
+ * `network` errors are routine on rural mobile/ISP links. Every phrase is real
+ * Urdu and keyword-rich enough that `matchScenario()` agrees with its own
+ * `scenario_id`, so tapping a pill produces exactly the triage that speaking
+ * the same words would. The demo never stalls on an ISP speech failure.
+ */
+export const PRESET_PHRASES: PresetPhrase[] = [
+  {
+    id: 'snakebite',
+    label_ur: 'سانپ کا کاٹنا',
+    label_en: 'Snakebite',
+    transcript_ur:
+      'میرے بیٹے کو سانپ نے کاٹ لیا ہے، سانپ زہریلا تھا، جلدی مدد بھیجیں',
+    scenario_id: 'snakebite',
+  },
+  {
+    id: 'heavy-bleeding',
+    label_ur: 'بھاری خون بہنا',
+    label_en: 'Heavy Bleeding',
+    transcript_ur:
+      'بہت زیادہ خون بہہ رہا ہے، خون نہیں رک رہا، جلدی مدد بھیجیں',
+    scenario_id: 'farm-machinery',
+  },
+  {
+    id: 'fracture',
+    label_ur: 'ہڈی ٹوٹنا',
+    label_en: 'Fracture',
+    transcript_ur: 'ان کے اوپر بھاری پتھر گر گیا ہے، ٹانگ کی ہڈی ٹوٹ گئی ہے',
+    scenario_id: 'crush-fall',
+  },
+  {
+    id: 'machine-trauma',
+    label_ur: 'مشین کا حادثہ',
+    label_en: 'Machine Trauma',
+    transcript_ur:
+      'اس کا ہاتھ مشین میں آ گیا ہے، انگلی کٹ گئی ہے اور بہت خون بہہ رہا ہے',
+    scenario_id: 'farm-machinery',
+  },
+]
+
 // ---------------------------------------------------------------------------
 // Help-bot quick replies
 // ---------------------------------------------------------------------------

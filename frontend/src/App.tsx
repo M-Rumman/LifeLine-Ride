@@ -1,84 +1,122 @@
 /**
- * Unified single-page cockpit.
+ * Three-panel demo cockpit.
  *
- * Layout contract from the directive:
- *   Left  (60%) — the active role's workflow view.
- *   Right (40%) — persistent situation map + live Urdu timeline feed.
+ * The demo directive is explicit: all three views are visible on ONE screen so
+ * a judge watches state change across them in real time — report in View 1,
+ * the responder flipping busy in View 2, dispatch/closure in View 3. A routed
+ * one-screen-at-a-time shell cannot show that, so every panel mounts at once.
  *
- * The right column never unmounts when the stepper changes role, and the
- * active incident lives in `CockpitContext` rather than in any view, so all
- * three roles inspect the exact same live record.
+ * The panels are self-contained: `ReporterView` owns the live timeline feed and
+ * `BhuView` owns the situation map, so no separate aside is needed — mounting
+ * the three views keeps both persistently on screen as a side effect.
+ *
+ * Geometry: three equal columns from `xl` up, each internally scrollable and
+ * sticky under the header, so all three panel headings stay in view while any
+ * one of them is scrolled. Below `xl` they stack — this is a laptop demo, so
+ * the wide layout is the one that matters.
+ *
+ * Shared state still lives entirely in `CockpitContext`; the panels are pure
+ * consumers, which is what makes mounting all three at once safe.
  */
 
-import { CockpitProvider, ROLES, useCockpit, type Role } from './state/CockpitContext'
-import { Header } from './components/Header'
-import { SituationMap } from './components/SituationMap'
-import { TimelineFeed } from './components/TimelineFeed'
+import type { ReactNode } from 'react'
+
+import {
+  CockpitProvider,
+  ROLES,
+  useCockpit,
+  type Role,
+} from './state/CockpitContext'
+import { Header, PANEL_ANCHOR } from './components/Header'
 import { ReporterView } from './views/ReporterView'
 import { ResponderView } from './views/ResponderView'
 import { BhuView } from './views/BhuView'
 import type { ToastTone } from './state/CockpitContext'
 
-/** One-line narration cue per stage, shown above the active view. */
-const ROLE_HINT: Record<Role, string> = {
-  reporter:
-    'Register an Urdu distress report, then read the AI triage verdict and dispatch decision.',
-  responder:
-    'Accept the dispatch, follow the voice-first help bot, and escalate the moment the patient deteriorates.',
-  bhu: 'Verify candidate responders, sign off the outcome, and read the accountability scorecard.',
+/** One-line narration cue per panel, shown under the panel title. */
+const ROLE_HINT_EN: Record<Role, string> = {
+  reporter: 'Capture the injury, confirm the village, and dispatch help.',
+  responder: 'Accept the dispatch, navigate in, and follow voice-first first-aid guidance.',
+  bhu: 'Track the live situation, verify candidates, and sign the outcome off.',
 }
 
+const ROLE_HINT_UR: Record<Role, string> = {
+  reporter: 'حادثہ رپورٹ کریں، گاؤں کی تصدیق کریں اور مدد روانہ کریں۔',
+  responder: 'ڈسپیچ قبول کریں، موقع پر پہنچیں اور آواز میں پہلی طبی امداد کی ہدایات لیں۔',
+  bhu: 'براہِ راست صورتحال دیکھیں، رضاکاروں کی تصدیق کریں اور نتیجہ منظور کریں۔',
+}
+
+/**
+ * DOM ids of the three panels live in `Header.tsx` next to the role tabs that
+ * scroll to them, so a panel and its anchor cannot drift apart.
+ */
+
 const TOAST_TONE: Record<ToastTone, string> = {
-  info: 'border-slate-200 bg-white text-slate-800 shadow-lg',
-  success: 'border-emerald-200 bg-white text-slate-800 shadow-lg',
-  error: 'border-rose-200 bg-white text-slate-800 shadow-lg',
-  critical: 'border-rose-300 bg-rose-50 text-rose-950 shadow-lg',
+  info: 'border-slate-700 bg-surface text-slate-100 shadow-panel',
+  success: 'border-emerald-500/40 bg-surface text-slate-100 shadow-panel',
+  error: 'border-rose-500/40 bg-surface text-slate-100 shadow-panel',
+  critical: 'border-rose-500/60 bg-rose-950/80 text-rose-50 shadow-rose',
 }
 
 const TOAST_DOT: Record<ToastTone, string> = {
   info: 'bg-sky-500',
   success: 'bg-emerald-500',
   error: 'bg-rose-500',
-  critical: 'bg-rose-600',
+  critical: 'bg-rose-500',
 }
 
 export default function App() {
   return (
     <CockpitProvider>
-      <Cockpit />
+      <Shell />
     </CockpitProvider>
   )
 }
 
-function Cockpit() {
-  const { role } = useCockpit()
+function Shell() {
+  return (
+    <div className="flex min-h-screen flex-col bg-canvas font-sans" dir="ltr">
+      <Header />
+      <main className="mx-auto w-full max-w-[1900px] flex-1 px-4 py-5">
+        <div className="grid gap-4 xl:grid-cols-3 xl:items-start">
+          <Panel role="reporter">
+            <ReporterView />
+          </Panel>
+          <Panel role="responder">
+            <ResponderView />
+          </Panel>
+          <Panel role="bhu">
+            <BhuView />
+          </Panel>
+        </div>
+      </main>
+      <ToastStack />
+    </div>
+  )
+}
+
+/**
+ * One cockpit column: banner + view, in a hairline-bordered well that scrolls
+ * internally so the three headings stay level with each other.
+ */
+function Panel({ role, children }: { role: Role; children: ReactNode }) {
   const stage = ROLES.find((r) => r.id === role) ?? ROLES[0]
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <Header />
-
-      <main className="mx-auto grid w-full max-w-[1800px] flex-1 gap-5 px-5 py-5 lg:grid-cols-[minmax(0,60fr)_minmax(0,40fr)]">
-        {/* ---------------- Left panel (60%): active role workflow ---------------- */}
-        <div className="flex min-w-0 flex-col gap-4">
-          <RoleBanner
-            step={stage.step}
-            labelEn={stage.label_en}
-            labelUr={stage.label_ur}
-            hint={ROLE_HINT[role]}
-          />
-          <RolePanel role={role} />
-        </div>
-
-        {/* ---------------- Right panel (40%): persistent map + feed ---------------- */}
-        <aside className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-[86px] lg:h-[calc(100vh-106px)] lg:self-start">
-          <SituationMap />
-          <TimelineFeed />
-        </aside>
-      </main>
-
-      <ToastStack />
-    </div>
+    <section
+      id={PANEL_ANCHOR[role]}
+      aria-label={stage.label_en}
+      className="flex min-w-0 scroll-mt-24 flex-col gap-3 xl:sticky xl:top-[84px] xl:max-h-[calc(100vh-104px)]"
+    >
+      <RoleBanner
+        step={stage.step}
+        labelEn={stage.label_en}
+        labelUr={stage.label_ur}
+        hint={ROLE_HINT_EN[role]}
+        hintUr={ROLE_HINT_UR[role]}
+      />
+      <div className="min-h-0 flex-1 xl:overflow-y-auto xl:pr-1">{children}</div>
+    </section>
   )
 }
 
@@ -87,44 +125,45 @@ function RoleBanner({
   labelEn,
   labelUr,
   hint,
+  hintUr,
 }: {
   step: number
   labelEn: string
   labelUr: string
   hint: string
+  hintUr: string
 }) {
+  const { lang } = useCockpit()
+  const primary = lang === 'ur' ? labelUr : labelEn
+  const secondary = lang === 'ur' ? labelEn : labelUr
+
   return (
-    <div className="card-panel flex items-center gap-4 px-5 py-3.5 border border-slate-200">
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-sky-300 bg-sky-50 text-sm font-bold text-sky-700">
+    <div className="flex items-center gap-3">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-accent/40 bg-accent/10 text-sm font-bold text-sky-300 tabular-nums">
         {step}
       </span>
       <div className="min-w-0">
-        <h2 className="truncate text-base font-bold tracking-tight text-slate-900">
-          {labelEn}
-          <span dir="rtl" className="ml-2 text-sm font-normal text-slate-500 font-urdu">
-            {labelUr}
+        <h2 className="truncate text-base font-bold tracking-tight text-ink">
+          <span className={lang === 'ur' ? 'font-urdu text-[17px] leading-8' : ''}>
+            {primary}
+          </span>
+          <span
+            className={
+              lang === 'ur'
+                ? 'ml-2 text-xs font-normal text-ink-dim'
+                : 'ml-2 text-xs font-normal text-ink-dim font-urdu'
+            }
+            dir={lang === 'ur' ? 'ltr' : 'rtl'}
+          >
+            {secondary}
           </span>
         </h2>
-        <p className="truncate text-xs text-slate-500">{hint}</p>
+        <p className="truncate text-[11px] text-ink-muted">
+          {lang === 'ur' ? hintUr : hint}
+        </p>
       </div>
     </div>
   )
-}
-
-/**
- * Only the active view mounts. That is safe because every piece of shared
- * demo state — incident id, triage result, help-bot transcript, timeline —
- * lives in `CockpitContext`, not in the views.
- */
-function RolePanel({ role }: { role: Role }) {
-  switch (role) {
-    case 'reporter':
-      return <ReporterView />
-    case 'responder':
-      return <ResponderView />
-    case 'bhu':
-      return <BhuView />
-  }
 }
 
 /** Non-blocking notifications, bottom-right, capped at four by the provider. */
@@ -140,20 +179,20 @@ function ToastStack() {
       {toasts.map((t) => (
         <div
           key={t.id}
-          className={`pointer-events-auto flex animate-fade-rise items-start gap-3 rounded-card border px-4 py-3 shadow-panel ${TOAST_TONE[t.tone]}`}
+          className={`pointer-events-auto flex animate-fade-rise items-start gap-3 rounded-card border px-4 py-3 ${TOAST_TONE[t.tone]}`}
         >
           <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${TOAST_DOT[t.tone]}`} />
           <div className="min-w-0 flex-1">
-            <p className="text-[13px] font-bold tracking-tight text-slate-900">{t.title}</p>
+            <p className="text-[13px] font-bold tracking-tight">{t.title}</p>
             {t.message && (
-              <p className="mt-0.5 text-[11px] leading-5 text-slate-600">{t.message}</p>
+              <p className="mt-0.5 text-[11px] leading-5 text-ink-muted">{t.message}</p>
             )}
           </div>
           <button
             type="button"
             onClick={() => dismissToast(t.id)}
             aria-label="Dismiss notification"
-            className="shrink-0 rounded-full px-1.5 text-slate-400 transition-colors hover:text-slate-800"
+            className="shrink-0 rounded-full px-1.5 text-ink-dim transition-colors hover:text-ink"
           >
             ×
           </button>

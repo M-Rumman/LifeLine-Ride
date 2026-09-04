@@ -3,7 +3,7 @@ schema_version: 1
 locale: en-US
 branch: main
 nodes_managed: true
-exported_at: "2026-09-03T08:20:47Z"
+exported_at: "2026-09-04T04:58:39Z"
 modules:
     "":
         dir_name: LifeLine Ride — Village Emergency Response System
@@ -18,19 +18,43 @@ modules:
         source_files: []
         children:
             - backend
+            - frontend
             - mockdata
         depends_on: []
         related_to: []
     backend:
-        dir_name: Emergency Response Network HTTP API (FastAPI Backend)
-        title: Emergency Response Network HTTP API (FastAPI Backend)
+        dir_name: Village Emergency Response Network — FastAPI Backend
+        title: Village Emergency Response Network — FastAPI Backend
         scope:
             - backend/
         source_files: []
         children: []
         depends_on: []
         related_to:
+            - path: frontend
             - path: mockdata
+    frontend:
+        dir_name: LifeLine Ride Cockpit Frontend
+        title: LifeLine Ride Cockpit Frontend
+        scope:
+            - frontend/
+        source_files: []
+        children:
+            - frontend/app_shell
+        depends_on: []
+        related_to:
+            - path: backend
+    frontend/app_shell:
+        dir_name: Application Shell & Root Bootstrap
+        title: Application Shell & Root Bootstrap
+        scope:
+            - frontend/src/App.tsx
+            - frontend/src/main.tsx
+            - frontend/src/index.css
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
     mockdata:
         dir_name: Help-Bot Scenario Fixtures & Replay Artifacts
         title: Help-Bot Scenario Fixtures & Replay Artifacts

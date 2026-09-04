@@ -258,6 +258,12 @@ export interface HealthResponse {
   incidents_in_memory: number
   helpbot_sessions: number
   cors_origins?: string[]
+  /** main.py ai_provider_snapshot(): TRIAGE_AI_PROVIDER, default "gemini". */
+  ai_provider?: string
+  /** Per-step model names behind that provider (stt / vision / classifier). */
+  ai_models?: { stt?: string; vision?: string; classifier?: string }
+  /** PORT from the repo-root .env — the backend's real listen port. */
+  port?: number
 }
 
 /** The project-wide error contract installed by install_error_handlers(). */

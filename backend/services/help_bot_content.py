@@ -29,9 +29,7 @@ SHARED_LINES = {
     # Spoken when the responder asks something outside this branch's defined
     # knowledge. Honest refusal + general safety guidance. Never improvise.
     "out_of_scope_fallback": (
-        "میں اس سوال کے جواب کی تربیت یافتہ نہیں ہوں، اس لیے میں غلط مشورہ نہیں دوں گا۔ "
-        "بنیادی ہدایت یہ ہے: مریض کو پرسکون رکھیں، جاری ابتدائی اقدامات پر عمل کریں، "
-        "اور طبی مدد کے پہنچنے کا انتظار کریں۔"
+        "معذرت، میں اس سوال کا جواب دینے کے لیے تربیت یافتہ نہیں ہوں۔ / Sorry, I am not trained to answer this question."
     ),
     # Spoken when the responder has been silent for a while (hands busy check-in).
     "check_in_line": "کیا سب ٹھیک چل رہا ہے؟ بتائیں، میں سن رہا ہوں۔",

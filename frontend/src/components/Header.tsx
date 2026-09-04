@@ -1,19 +1,38 @@
 /**
- * Global header: brand wordmark, backend health ping (Live / Not Live),
- * active incident indicator, and the three-stage Role Switcher.
+ * Global navbar (Rozgaar pattern — fixed at top, deliberately minimal).
+ *
+ * Contents, in order:
+ *   brand wordmark (click -> gateway) · live backend/DB badge ·
+ *   active-incident chip · role nav (hidden on the gateway) ·
+ *   segmented English | اردو pill.
+ *
+ * The bilingual switcher changes STRING TRANSLATIONS ONLY. It never flips
+ * `dir` on the shell, so the page structure does not mirror or reverse when
+ * the language changes — Urdu runs are marked RTL individually instead.
  */
 
 import { useState } from 'react'
 
 import { useCockpit, ROLES, type Role } from '../state/CockpitContext'
-import { statusLabel, tierMeta } from '../lib/urdu'
+import { statusLabel } from '../lib/urdu'
 import { Pill, StatusDot } from './ui'
-import { API_BASE } from '../lib/api'
+import { API_LABEL } from '../lib/api'
+
+/**
+ * DOM ids of the three cockpit panels, owned here because the role tabs are
+ * what scroll to them. `App.tsx` imports this table so a panel and its anchor
+ * cannot drift apart.
+ */
+export const PANEL_ANCHOR: Record<Role, string> = {
+  reporter: 'panel-reporter',
+  responder: 'panel-responder',
+  bhu: 'panel-bhu',
+}
 
 export function Header() {
   const {
-    role,
-    setRole,
+    lang,
+    setLang,
     incidentId,
     incident,
     timeline,
@@ -23,44 +42,68 @@ export function Header() {
     polling,
     resetDemo,
     adoptIncident,
+    runQuickDemo,
   } = useCockpit()
 
   const [adoptValue, setAdoptValue] = useState('')
   const [showAdopt, setShowAdopt] = useState(false)
+  /** Which panel the role tabs last jumped to. A scroll affordance, not a view. */
+  const [focused, setFocused] = useState<Role>('reporter')
 
   const tier = incident?.severity_tier ?? timeline?.severity_tier ?? null
   const status = timeline?.status ?? null
   const statusText = statusLabel(status)
+  const isCritical = tier === 'critical' && timeline?.status !== 'closed'
+
+  /**
+   * All three panels are on screen at once, so the role tabs JUMP to a panel
+   * instead of swapping the view — a routed shell would hide the very state
+   * change the judge is meant to watch.
+   */
+  const focusPanel = (next: Role) => {
+    setFocused(next)
+    document.getElementById(PANEL_ANCHOR[next])?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+      inline: 'start',
+    })
+  }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-iris-border bg-[#16165c]/95 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-[1800px] flex-wrap items-center gap-x-5 gap-y-3 px-5 py-3">
+    <header className="sticky top-0 z-40 border-b border-slate-800 bg-canvas/90 backdrop-blur-xl">
+      <div className="mx-auto flex w-full max-w-[1900px] flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3 sm:px-6">
         {/* ---------------- Brand ---------------- */}
-        <div className="flex items-center gap-3">
-          <div className="relative grid h-10 w-10 place-items-center rounded-full border border-clinical-cyan/60 bg-clinical-cyan/12">
-            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none">
+        <button
+          type="button"
+          onClick={() => focusPanel('reporter')}
+          className="flex items-center gap-3 rounded-2xl text-left transition-opacity hover:opacity-85"
+          title={lang === 'ur' ? 'رپورٹر پینل پر جائیں' : 'Jump to the reporter panel'}
+        >
+          <span className="grid h-10 w-10 place-items-center rounded-2xl border border-accent/35 bg-accent/10">
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
               <path
                 d="M3 12h3.5l2-5 3.5 10 2.5-6 1.8 3H21"
-                stroke="#00b1ff"
+                stroke="#0ea5e9"
                 strokeWidth="1.9"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
             </svg>
-          </div>
-          <div className="leading-tight">
-            <h1 className="text-[17px] font-bold tracking-tight text-white">
+          </span>
+          <span className="leading-tight">
+            <span className="block text-[16px] font-bold tracking-tight text-ink">
               LifeLine Ride
-            </h1>
-            <p dir="rtl" className="text-[12px] text-slate-300 font-urdu leading-5">
+            </span>
+            <span
+              dir="rtl"
+              className="block font-urdu text-[11px] leading-6 text-ink-muted"
+            >
               دیہی ایمرجنسی رسپانس نیٹ ورک
-            </p>
-          </div>
-        </div>
+            </span>
+          </span>
+        </button>
 
-        <span className="hidden h-8 w-px bg-slate-600/50 lg:block" />
-
-        {/* ---------------- Server status refactor (Live / Not Live) ---------------- */}
+        {/* ---------------- Live backend / database badge ---------------- */}
         <HealthChip
           online={backendOnline}
           error={backendError}
@@ -68,39 +111,33 @@ export function Header() {
           polling={polling}
         />
 
-        {/* ---------------- Active incident indicator (High-Contrast) ---------------- */}
-        <div className="flex items-center gap-2">
-          {incidentId ? (
-            <div className="flex items-center justify-between gap-2.5 rounded-full border border-slate-600/70 bg-[#1e1d68] px-4 py-2 shadow-inner">
-              <div className="flex items-center gap-2">
-                <StatusDot tone={status === 'closed' ? 'mint' : 'cyan'} />
-                <span className="font-mono text-xs font-bold text-white">{incidentId}</span>
-                {tier && (
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full ${tierMeta(tier).dot}`}
-                  />
-                )}
-              </div>
-              <div className="flex items-center gap-1.5 text-[11px]">
-                <span className="font-semibold text-white">{statusText.en}</span>
-                <span dir="rtl" className="font-urdu text-[12px] leading-none text-slate-200">
-                  ({statusText.ur})
-                </span>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 rounded-full border border-slate-600/70 bg-[#1e1d68] px-4 py-2 text-xs">
-              <StatusDot tone="ash" />
-              <span className="text-slate-200 font-medium">No active incident</span>
-            </div>
-          )}
-        </div>
+        {/* ---------------- Active incident chip ---------------- */}
+        {incidentId && (
+          <div
+            className={`flex items-center gap-2 rounded-full border px-3.5 py-1.5 ${
+              isCritical
+                ? 'border-rose-500/45 bg-rose-500/10'
+                : 'border-slate-800 bg-surface'
+            }`}
+          >
+            <StatusDot
+              tone={status === 'closed' ? 'mint' : isCritical ? 'critical' : 'cyan'}
+              pulse={status !== 'closed'}
+            />
+            <span className="font-mono text-xs font-bold text-ink">{incidentId}</span>
+            <span className="hidden text-[11px] text-ink-muted sm:inline">
+              {lang === 'ur' ? statusText.ur : statusText.en}
+            </span>
+          </div>
+        )}
 
-        <div className="ml-auto flex items-center gap-2">
-          {/* ---------------- Role Switcher ---------------- */}
+        {/* ---------------- Right cluster ---------------- */}
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {/* Panel jump nav. Every panel is already on screen, so these move
+              the eye rather than change the view. */}
           <nav
-            aria-label="Role stepper"
-            className="flex items-center gap-1 rounded-full border border-slate-600/60 bg-[#16165c] p-1"
+            aria-label="Panels"
+            className="flex items-center gap-1 rounded-full border border-slate-800 bg-surface p-1"
           >
             {ROLES.map((r) => (
               <RoleTab
@@ -108,11 +145,25 @@ export function Header() {
                 step={r.step}
                 labelEn={r.label_en}
                 labelUr={r.label_ur}
-                active={role === r.id}
-                onClick={() => setRole(r.id as Role)}
+                active={focused === r.id}
+                lang={lang}
+                onClick={() => focusPanel(r.id as Role)}
               />
             ))}
           </nav>
+
+          {/* Always on: `runQuickDemo` signals ReporterView, which owns the
+              village/evidence-pair state this needs to drive. Stays enabled
+              after a report so "show me again" re-runs the whole loop in one
+              click — a fresh report simply supersedes the previous incident. */}
+          <Pill
+            variant="cyan"
+            size="sm"
+            onClick={runQuickDemo}
+            title="Stage the cached finger/machine-injury fixture — VILLAGE-A, PhotoshopExtension_Image (1).png + ungli.mp3 — and submit it. Served from .triage_cache, so it burns zero AI quota. Tier 3, so it exercises simultaneous responder + BHU + ambulance dispatch."
+          >
+            {lang === 'ur' ? 'فوری ڈیمو' : 'Quick Demo'}
+          </Pill>
 
           {showAdopt && (
             <form
@@ -132,7 +183,7 @@ export function Header() {
                 onChange={(e) => setAdoptValue(e.target.value)}
                 placeholder="INC-XXXXXX"
                 aria-label="Adopt an existing incident id"
-                className="field w-40 py-1.5 font-mono text-xs"
+                className="field w-36 py-1.5 font-mono text-xs"
               />
               <Pill variant="cyan" size="sm" type="submit">
                 Track
@@ -146,9 +197,8 @@ export function Header() {
             onClick={() => setShowAdopt((v) => !v)}
             title="Track an incident id that already exists on the backend"
           >
-            Adopt
+            {lang === 'ur' ? 'اڈاپٹ' : 'Adopt'}
           </Pill>
-
           <Pill
             variant="ghost"
             size="sm"
@@ -156,11 +206,60 @@ export function Header() {
             disabled={!incidentId}
             title="Clear the active incident from the cockpit"
           >
-            Reset
+            {lang === 'ur' ? 'ری سیٹ' : 'Reset'}
           </Pill>
+
+          <LangSwitcher lang={lang} setLang={setLang} />
         </div>
       </div>
     </header>
+  )
+}
+
+/**
+ * Persistent segmented pill: `English | اردو`. Both segments are real buttons
+ * so either language is one click away and the active one is unambiguous —
+ * a single toggle button cannot show which side you are on at a glance.
+ */
+function LangSwitcher({
+  lang,
+  setLang,
+}: {
+  lang: 'ur' | 'en'
+  setLang: (lang: 'ur' | 'en') => void
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Interface language"
+      className="flex items-center gap-0.5 rounded-full border border-slate-800 bg-surface p-1"
+    >
+      <button
+        type="button"
+        onClick={() => setLang('en')}
+        aria-pressed={lang === 'en'}
+        className={`rounded-full px-3 py-1 text-[11px] font-semibold transition-colors ${
+          lang === 'en'
+            ? 'bg-accent text-white shadow-sm'
+            : 'text-ink-muted hover:text-ink'
+        }`}
+      >
+        English
+      </button>
+      <button
+        type="button"
+        onClick={() => setLang('ur')}
+        aria-pressed={lang === 'ur'}
+        className={`rounded-full px-3 py-1 font-urdu text-[13px] leading-5 font-semibold transition-colors ${
+          lang === 'ur'
+            ? 'bg-accent text-white shadow-sm'
+            : 'text-ink-muted hover:text-ink'
+        }`}
+        dir="rtl"
+      >
+        اردو
+      </button>
+    </div>
   )
 }
 
@@ -169,44 +268,53 @@ function RoleTab({
   labelEn,
   labelUr,
   active,
+  lang,
   onClick,
 }: {
   step: number
   labelEn: string
   labelUr: string
   active: boolean
+  lang: 'ur' | 'en'
   onClick: () => void
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-current={active ? 'step' : undefined}
-      className={`pill px-4 py-2 text-xs transition-colors ${
+      aria-current={active ? 'page' : undefined}
+      className={`pill px-3 py-1.5 text-xs transition-colors ${
         active
-          ? 'bg-sky-600 text-white font-semibold shadow-md'
-          : 'border border-transparent text-slate-300 hover:text-white hover:bg-white/10'
+          ? 'bg-accent/15 text-sky-300 border border-accent/40 font-semibold'
+          : 'border border-transparent text-ink-muted hover:text-ink hover:bg-raised/60'
       }`}
     >
       <span
-        className={`grid place-items-center rounded-full text-[10px] font-bold ${
-          active ? 'bg-white/20 text-white' : 'bg-slate-700/60 text-slate-300'
+        className={`grid h-[18px] w-[18px] place-items-center rounded-full text-[10px] font-bold tabular-nums ${
+          active ? 'bg-accent/25 text-sky-200' : 'bg-raised text-ink-dim'
         }`}
-        style={{ height: '18px', width: '18px' }}
       >
         {step}
       </span>
-      <span className="font-medium tracking-tight">{labelEn}</span>
-      <span dir="rtl" className="font-urdu text-[13px] opacity-90">
-        {labelUr}
-      </span>
+      {lang === 'ur' ? (
+        <span dir="rtl" className="font-urdu text-[13px] leading-5">
+          {labelUr}
+        </span>
+      ) : (
+        <span className="font-medium tracking-tight">{labelEn}</span>
+      )}
     </button>
   )
 }
 
 /**
- * Server Status Chip: Displays concise dynamic "Live" (green) or "Not Live" (red)
- * with static circular status dot.
+ * Live badge: green only when the backend answers AND PostgreSQL is reachable.
+ * Anything less is a red "Not Live" — a half-working backend must never read
+ * as healthy during a demo.
+ *
+ * Also surfaces the active AI provider straight from `/health`, so a presenter
+ * can see at a glance whether the next report will burn live Gemini quota or be
+ * served from `.triage_cache`.
  */
 function HealthChip({
   online,
@@ -216,45 +324,36 @@ function HealthChip({
 }: {
   online: boolean
   error: { code: string; message: string } | null
-  health: { db_reachable?: boolean; responders_loaded?: number; helpbot_sessions?: number } | null
+  health: {
+    db_reachable?: boolean
+    responders_loaded?: number
+    helpbot_sessions?: number
+    ai_provider?: string
+  } | null
   polling: boolean
 }) {
   const isLive = online && Boolean(health?.db_reachable)
-  const tone = isLive ? 'mint' : 'critical'
 
   return (
     <div
-      className="flex items-center gap-2 rounded-full border border-slate-600/70 bg-[#1e1d68] px-3.5 py-1.5"
+      className="flex items-center gap-2 rounded-full border border-slate-800 bg-surface px-3.5 py-1.5"
       title={
         isLive
-          ? `Backend and database healthy at ${API_BASE}`
-          : `Backend or database issue at ${API_BASE}: ${error?.code ?? (online ? 'DB_UNREACHABLE' : 'NO_RESPONSE')} — ${
-              error?.message ?? (online ? 'PostgreSQL unreachable' : 'Backend offline')
-            }`
+          ? `Backend and database healthy at ${API_LABEL}`
+          : `Backend or database issue at ${API_LABEL}: ${
+              error?.code ?? (online ? 'DB_UNREACHABLE' : 'NO_RESPONSE')
+            } — ${error?.message ?? (online ? 'PostgreSQL unreachable' : 'Backend offline')}`
       }
     >
-      <StatusDot tone={tone} />
-      <span className={`text-[12px] font-bold tracking-wide ${isLive ? 'text-emerald-400' : 'text-rose-400'}`}>
+      <StatusDot tone={isLive ? 'mint' : 'critical'} pulse={!isLive} />
+      <span
+        className={`text-[12px] font-bold tracking-wide ${
+          isLive ? 'text-emerald-400' : 'text-rose-400'
+        }`}
+      >
         {isLive ? 'Live' : 'Not Live'}
       </span>
-      {online && health && (
-        <span className="hidden items-center gap-2 text-[10px] text-slate-300 xl:flex">
-          <span className="tabular-nums font-mono text-slate-200">
-            {health.responders_loaded ?? 0} resp
-          </span>
-          <span className="h-3 w-px bg-slate-600/50" />
-          <span className="tabular-nums font-mono text-slate-200">
-            {health.helpbot_sessions ?? 0} bot
-          </span>
-          <span className="h-3 w-px bg-slate-600/50" />
-          <span className={health.db_reachable ? 'text-emerald-400 font-semibold' : 'text-rose-400 font-semibold'}>
-            {health.db_reachable ? 'DB ok' : 'DB down'}
-          </span>
-        </span>
-      )}
-      {polling && (
-        <span className="h-1.5 w-1.5 rounded-full bg-clinical-cyan opacity-80" />
-      )}
+      {polling && <span className="h-1.5 w-1.5 rounded-full bg-accent opacity-80" />}
     </div>
   )
 }
