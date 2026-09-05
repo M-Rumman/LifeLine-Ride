@@ -87,8 +87,11 @@ class DispatchDecision:
     notify_bhu: bool
     bhu_urgency: Optional[Literal["standby", "urgent"]]
     ambulance_requested: bool
-    status: Literal["dispatched", "escalated_bhu_only", "no_resources"]
+    status: Literal["dispatched", "escalated_bhu_only", "no_resources", "self_care_only"]
     reasoning: str   # human-readable single-line trace for logs
+    dispatch_responder: bool = True
+    clinical_category: Optional[str] = None
+    clinical_condition: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -190,25 +193,34 @@ def decideDispatch(incident: slice_runner.Incident) -> DispatchDecision:
     Returns a DispatchDecision with the full ranked responder list and
     notification flags. Makes ZERO network calls.
 
-    Matching rules (per spec):
-    - Responders are filtered to village_id and availability == "available".
-    - Ranking preserves the original SEED_RESPONDERS list order (consistent
-      with the tested Farhan Ali fallback scenario in the vertical slice).
-    - BHU is looked up via the village's pre-linked BHU (linked_village_ids),
-      NOT geo-radius search (explicitly ruled out of scope).
-    - Tier drives notification scope:
-        minor    -> responder only
-        moderate -> responder + BHU standby
-        critical -> responder + BHU urgent + ambulance, simultaneously
-
-    No available responder -> escalated_bhu_only (proven vertical slice
-    behavior, preserved exactly).
+    Clinical urgency decoupling:
+    - High-acuity life threats (Category A): both local responder + ambulance requested.
+    - Physical trauma (Category B): local responder only, no ambulance.
+    - Superficial / minor (Category C): zero dispatch (self-care).
+    - No available responder -> escalated_bhu_only.
     """
     village_id = incident.gps_location.village_id
     tier = incident.severity_tier
     # Real Tamman-area locality ids are retained on the incident while dispatch
     # uses the current seeded responder coverage group as a compatibility layer.
     coverage_id = coverage_village_id(village_id)
+
+    # --- Clinical rules engine evaluation ---
+    text_content = f"{getattr(incident, 'voice_transcript', '') or ''} {getattr(incident, 'detected_emergency', '') or ''} {getattr(incident, 'anticipated_condition', '') or ''}"
+    clinical_eval = slice_runner.evaluate_clinical_dispatch(
+        getattr(incident, "injury_type_flags", []),
+        text_content,
+        tier,
+    )
+    ambulance_requested = clinical_eval["request_ambulance"]
+    dispatch_responder = clinical_eval["dispatch_responder"]
+    clinical_category = clinical_eval["clinical_category"]
+    clinical_condition = clinical_eval["clinical_condition"]
+
+    incident.clinical_category = clinical_category
+    incident.clinical_condition = clinical_condition
+    incident.dispatch_responder = dispatch_responder
+    incident.ambulance_requested = ambulance_requested
 
     # --- BHU lookup: prefer the real locality's linked facility, then fall back
     # to the legacy seed association used by the regression suite. ---
@@ -251,37 +263,59 @@ def decideDispatch(incident: slice_runner.Incident) -> DispatchDecision:
             selected_responder=None,
             bhu=linked_bhu,
             notify_bhu=True,
-            bhu_urgency="urgent" if tier == "critical" else "standby",
-            ambulance_requested=(tier == "critical"),
+            bhu_urgency="urgent" if (tier == "critical" or ambulance_requested) else "standby",
+            ambulance_requested=ambulance_requested,
+            dispatch_responder=dispatch_responder,
+            clinical_category=clinical_category,
+            clinical_condition=clinical_condition,
             status="escalated_bhu_only" if linked_bhu else "no_resources",
             reasoning=(
                 f"No available responders in {village_id}. "
-                f"Escalated to {bhu_name}. Tier: {tier}."
+                f"Escalated to {bhu_name}. Tier: {tier}. Clinical: {clinical_condition} ({clinical_category})."
+            ),
+        )
+
+    # --- Zero dispatch (Category C) check when not escalated ---
+    if not dispatch_responder and not ambulance_requested and tier == "minor":
+        return DispatchDecision(
+            incident_id=incident.incident_id,
+            ranked_responders=ranked,
+            selected_responder=None,
+            bhu=linked_bhu,
+            notify_bhu=False,
+            bhu_urgency=None,
+            ambulance_requested=False,
+            dispatch_responder=False,
+            clinical_category=clinical_category,
+            clinical_condition=clinical_condition,
+            status="self_care_only",
+            reasoning=(
+                f"Zero dispatch (self-care) for {village_id}. Condition: {clinical_condition} ({clinical_category})."
             ),
         )
 
     # --- Primary responder selected; ranked list kept for fallback walker ---
     primary = ranked[0]
 
-    # --- Tier-based notification flags (preserved exactly from vertical slice) ---
-    if tier == "minor":
-        notify_bhu = False
-        urgency = None
-        ambulance = False
-    elif tier == "moderate":
-        notify_bhu = True
-        urgency = "standby"
-        ambulance = False
-    else:  # critical
+    # --- Notification flags driven by clinical category ---
+    if clinical_category == "CATEGORY_A" or tier == "critical" or ambulance_requested:
         notify_bhu = True
         urgency = "urgent"
         ambulance = True
+    elif clinical_category == "CATEGORY_B":
+        notify_bhu = (tier == "moderate")
+        urgency = "standby" if notify_bhu else None
+        ambulance = False
+    else:
+        notify_bhu = (tier == "moderate")
+        urgency = "standby" if notify_bhu else None
+        ambulance = False
 
     bhu_desc = f"notify {urgency}" if notify_bhu else "no notification"
     reasoning = (
         f"Selected {primary.name} ({primary.responder_id}) from {village_id} "
         f"[{len(ranked)} available, ranked by list position]. "
-        f"Tier: {tier}. BHU: {bhu_desc}. Ambulance: {ambulance}."
+        f"Tier: {tier}. Clinical: {clinical_condition} ({clinical_category}). BHU: {bhu_desc}. Ambulance: {ambulance}."
     )
 
     return DispatchDecision(
@@ -292,6 +326,9 @@ def decideDispatch(incident: slice_runner.Incident) -> DispatchDecision:
         notify_bhu=notify_bhu,
         bhu_urgency=urgency,
         ambulance_requested=ambulance,
+        dispatch_responder=dispatch_responder,
+        clinical_category=clinical_category,
+        clinical_condition=clinical_condition,
         status="dispatched",
         reasoning=reasoning,
     )
@@ -536,7 +573,7 @@ def acknowledgeDispatch(incident_id: str, responder_id: str) -> None:
             "update_id": f"UPD-{uuid.uuid4().hex[:6].upper()}",
             "timestamp": _now_iso(),
             "stage": "responder_en_route",
-            "message_urdu": f"مددگار {responder_name} نے الرٹ قبول کر لیا ہے اور وہ جائے وقوعہ کی طرف روانہ ہیں۔",
+            "message_urdu": f"مددگار {responder_name} نے الرٹ قبول کر لیا ہے اور وہ جائے وقوعہ کے لیے مطلع ہیں۔",
             "severity_tier": incident.severity_tier,
         })
         # Ordering fix: _append_dispatch_event above synced the snapshot BEFORE

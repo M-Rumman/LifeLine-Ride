@@ -29,9 +29,11 @@ import hashlib
 import io
 import json
 import os
+import re
 import threading
 import time
 import wave
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -330,6 +332,25 @@ def _tts_voice() -> str:
     return os.environ.get("GEMINI_TTS_VOICE", "Kore")
 
 
+def _tts_provider() -> str:
+    """edge (default): Microsoft Edge neural Urdu voice — free, no API key,
+    no daily quota. gemini: fallback only; its free tier allows ~10 renders
+    per day per model, which a live demo exhausts in minutes."""
+    return os.environ.get("TTS_PROVIDER", "edge").strip().lower()
+
+
+def _edge_voice() -> str:
+    # ur-PK-UzmaNeural is the female Pakistan-Urdu voice (ur-PK-GulNeural does
+    # not exist — Gul is ur-IN; a wrong voice name renders silence).
+    return os.environ.get("EDGE_TTS_VOICE", "ur-PK-UzmaNeural")
+
+
+def _edge_rate() -> str:
+    """Slightly slower than the default: clearer Urdu articulation for a
+    responder working on a noisy, stressful scene."""
+    return os.environ.get("EDGE_TTS_RATE", "-10%")
+
+
 def gemini_synthesize_speech(text: str) -> bytes:
     """Gemini TTS -> raw PCM bytes (24 kHz 16-bit mono). Urdu ('ur') is a
     documented supported language of the Gemini TTS model family."""
@@ -350,6 +371,33 @@ def gemini_synthesize_speech(text: str) -> bytes:
     return resp.candidates[0].content.parts[0].inline_data.data
 
 
+def edge_synthesize_speech(text: str) -> bytes:
+    """Microsoft Edge neural TTS -> MP3 bytes (24 kHz mono) in a native Urdu
+    voice. Primary Urdu voice of the help bot: unlike Gemini TTS's free tier
+    it has no daily render quota. edge-tts is async, so when this runs inside
+    FastAPI's event loop the render happens on a worker thread's own loop."""
+    import asyncio
+    import edge_tts
+
+    async def _render() -> bytes:
+        parts: list = []
+        async for chunk in edge_tts.Communicate(
+            text, _edge_voice(), rate=_edge_rate()
+        ).stream():
+            if chunk["type"] == "audio":
+                parts.append(chunk["data"])
+        if not parts:
+            raise RuntimeError("edge-tts returned no audio")
+        return b"".join(parts)
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(_render())
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, _render()).result()
+
+
 def dashscope_synthesize_speech(text: str) -> bytes:
     """DashScope swap-back target: CosyVoice. Urdu voice availability is
     UNVERIFIED (DashScope docs must be checked first, same discipline as
@@ -361,6 +409,48 @@ def dashscope_synthesize_speech(text: str) -> bytes:
         "possibly-non-Urdu audio to a responder. Verify an Urdu-capable "
         "CosyVoice voice against current DashScope docs, then implement."
     )
+
+
+# Latin first-aid terms a model may still emit; the spoken form gets the Urdu
+# equivalent so the voice never switches into English mid-sentence.
+_LATIN_TO_URDU = {
+    "gauze": "پٹی", "bandage": "پٹی", "pressure": "دباؤ", "cloth": "کپڑا",
+    "clean": "صاف", "water": "پانی", "ice": "برف", "pulse": "نبض",
+    "breathing": "سانس", "unconscious": "بے ہوش", "hospital": "ہسپتال",
+    "ambulance": "ایمبولینس", "stitches": "ٹانکے", "stitch": "ٹانکہ",
+    "suture": "ٹانکے", "tourniquet": "ٹورنیکیٹ", "splint": "سپلنٹ",
+    "blanket": "کمبل", "position": "پوزیشن",
+}
+
+
+def sanitize_for_speech(text: str) -> str:
+    """Plain-text, Urdu-only form of a reply for the TTS boundary.
+
+    Two jobs:
+    1. Markdown (‏**bold**, _emphasis_, `code`, [label](url), heading hashes)
+       is stripped — a TTS model vocalises it literally (responders heard
+       "asterisk asterisk").
+    2. English is purged — the Urdu voice reads Latin words in English, so
+       parenthetical glosses like "(apply pressure)" are removed, known terms
+       are mapped to their Urdu equivalent, and any remaining Latin runs are
+       dropped. The ON-SCREEN text keeps everything; only the spoken form is
+       normalised here.
+    """
+    t = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", text)  # [label](url) -> label
+    t = t.replace("**", " ").replace("__", " ")        # bold markers first
+    t = re.sub(r"[*_`#]+", " ", t)                     # italic / code / headings
+    # Parenthetical/bracketed English glosses: the Urdu sentence already
+    # carries the meaning, so the gloss is dropped rather than spoken.
+    t = re.sub(r"[\(\[][^)\]]*[A-Za-z][^)\]]*[\)\]]", " ", t)
+    for latin, urdu in _LATIN_TO_URDU.items():
+        t = re.sub(rf"\b{latin}s?\b", urdu, t, flags=re.IGNORECASE)
+    t = re.sub(r"[A-Za-z]+", " ", t)                   # any leftover Latin words
+    # Punctuation the Urdu voice stumbles on -> natural Urdu stops.
+    t = t.replace(":", "۔").replace(";", "،")
+    t = t.replace("/", " یا ").replace("&", " اور ").replace("-", " ")
+    t = re.sub(r"۔{2,}", "۔", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    return t
 
 
 def _pcm_to_wav_bytes(pcm: bytes, sample_rate: int = TTS_SAMPLE_RATE) -> bytes:
@@ -383,12 +473,67 @@ def _tts_manifest() -> dict:
     return {}
 
 
-def _tts_cache_path(text: str) -> Path:
+def _tts_cache_path(text: str, voice: str, suffix: str = ".wav") -> Path:
     # Keyed by voice+text only (not model): audio rendered by one Gemini TTS
     # model stays valid if the model is swapped (e.g. quota-driven). Rendering
     # provenance is tracked in tts_cache/manifest.json instead.
-    key = hashlib.sha1(f"{_tts_voice()}|{text}".encode("utf-8")).hexdigest()[:16]
-    return TTS_CACHE_DIR / f"{key}.wav"
+    key = hashlib.sha1(f"{voice}|{text}".encode("utf-8")).hexdigest()[:16]
+    return TTS_CACHE_DIR / f"{key}{suffix}"
+
+
+# One Gemini TTS call must finish inside TRIAGE_CALL_TIMEOUT_S (30 s); ~150
+# Urdu characters (~12-15 s of speech) render comfortably within it, while a
+# full 700+ char copilot reply timed out and silenced the bot.
+SPEECH_CHUNK_CHARS = 150
+_MANIFEST_LOCK = threading.Lock()
+
+
+def _split_for_speech(text: str, max_chars: int = SPEECH_CHUNK_CHARS) -> list:
+    """Sentence-boundary chunks (Urdu ۔ / . / ! / ? / newline) so every TTS
+    call stays inside the client read timeout."""
+    chunks: list = []
+    cur = ""
+    for sentence in re.split(r"(?<=[۔!?\n])\s*", text):
+        sentence = sentence.strip()
+        if not sentence:
+            continue
+        if cur and len(cur) + 1 + len(sentence) > max_chars:
+            chunks.append(cur)
+            cur = sentence
+        else:
+            cur = f"{cur} {sentence}".strip()
+        while len(cur) > max_chars:  # hard-split an overlong sentence
+            chunks.append(cur[:max_chars])
+            cur = cur[max_chars:]
+    if cur:
+        chunks.append(cur)
+    return chunks or [text.strip()]
+
+
+def _write_cache(path: Path, payload: bytes, text: str, meta: dict) -> None:
+    TTS_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(payload)
+    with _MANIFEST_LOCK:  # parallel chunk renders share manifest.json
+        manifest = _tts_manifest()
+        entry = {"rendered_at": _now_iso(), "text": text[:120]}
+        entry.update(meta)
+        manifest[path.name] = entry
+        (TTS_CACHE_DIR / "manifest.json").write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _chunk_pcm(impl, chunk: str) -> bytes:
+    """Render one speech chunk (cache-first) and return its raw PCM frames.
+    A retry after a partial failure re-renders only the chunk that failed."""
+    cpath = _tts_cache_path(chunk, _tts_voice())
+    if cpath.is_file():
+        with wave.open(str(cpath), "rb") as wf:
+            return wf.readframes(wf.getnframes())
+    pcm = impl(chunk)
+    _write_cache(cpath, _pcm_to_wav_bytes(pcm), chunk,
+                 {"provider": "gemini", "model": _tts_model(),
+                  "voice": _tts_voice()})
+    return pcm
 
 
 def speakGuidance(text: str) -> dict:
@@ -396,20 +541,43 @@ def speakGuidance(text: str) -> dict:
 
     Every scripted line is rendered once and cached, so repeat runs do not
     burn quota and the fail-safe line can be pre-rendered at session start
-    (a later network failure then needs no live call to stay vocal)."""
-    path = _tts_cache_path(text)
+    (a later network failure then needs no live call to stay vocal). The text
+    is sanitised FIRST so the cache key and the rendered audio both carry the
+    markdown-free spoken form.
+
+    Provider order: Edge neural Urdu (free, quota-free, single call) then
+    Gemini TTS — its free tier (~10 renders/day per model) is chunked on
+    sentence bounds and rendered in parallel so each call stays inside the
+    client read timeout and the cockpit's 90 s request budget."""
+    text = sanitize_for_speech(text)
+    if _tts_provider() == "edge":
+        path = _tts_cache_path(text, _edge_voice(), ".mp3")
+        if path.is_file():
+            return {"wav_path": path, "cached": True, "bytes": path.stat().st_size}
+        try:
+            mp3 = edge_synthesize_speech(text)
+            _write_cache(path, mp3, text,
+                         {"provider": "edge", "voice": _edge_voice()})
+            return {"wav_path": path, "cached": False,
+                    "bytes": path.stat().st_size}
+        except Exception as exc:  # noqa: BLE001 — voice must survive via Gemini
+            _warn(f"Edge TTS failed ({exc}); falling back to Gemini TTS.")
+    path = _tts_cache_path(text, _tts_voice())
     if path.is_file():
         return {"wav_path": path, "cached": True, "bytes": path.stat().st_size}
     impl = (gemini_synthesize_speech if slice_runner._ai_provider() == "gemini"
             else dashscope_synthesize_speech)
-    pcm = impl(text)
-    TTS_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(_pcm_to_wav_bytes(pcm))
-    manifest = _tts_manifest()
-    manifest[path.name] = {"model": _tts_model(), "voice": _tts_voice(),
-                           "rendered_at": _now_iso(), "text": text[:120]}
-    (TTS_CACHE_DIR / "manifest.json").write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    chunks = _split_for_speech(text)
+    if len(chunks) == 1:
+        pcm = _chunk_pcm(impl, text)
+    else:
+        # Parallel: sequential chunk renders would push a long reply past the
+        # cockpit's 90 s request budget.
+        with ThreadPoolExecutor(max_workers=min(4, len(chunks))) as pool:
+            pcm = b"".join(pool.map(lambda c: _chunk_pcm(impl, c), chunks))
+    _write_cache(path, _pcm_to_wav_bytes(pcm), text,
+                 {"provider": "gemini", "model": _tts_model(),
+                  "voice": _tts_voice()})
     return {"wav_path": path, "cached": False, "bytes": path.stat().st_size}
 
 
@@ -437,7 +605,10 @@ def play_wav(wav_path: Path, mic_monitor=None) -> bool:
     if sd is None:
         return False
     try:
-        data, sr = _read_wav_int16(wav_path)
+        if wav_path.suffix.lower() == ".mp3":
+            data, sr = _read_mp3_int16(wav_path)
+        else:
+            data, sr = _read_wav_int16(wav_path)
         frames_total = len(data)
         cursor = {"i": 0}
         finished = threading.Event()
@@ -477,6 +648,17 @@ def _read_wav_int16(wav_path: Path):
         sr = wf.getframerate()
         frames = wf.readframes(wf.getnframes())
     return np.frombuffer(frames, dtype=np.int16), sr
+
+
+def _read_mp3_int16(mp3_path: Path):
+    """Decode an Edge-TTS mp3 for terminal playback (libsndfile >= 1.1)."""
+    import numpy as np  # noqa: F401  (dtype namespace, mirrors _read_wav_int16)
+    import soundfile as sf
+
+    pcm, sr = sf.read(str(mp3_path), dtype="int16")
+    if pcm.ndim > 1:
+        pcm = pcm[:, 0]
+    return pcm, sr
 
 
 class MicMonitor:

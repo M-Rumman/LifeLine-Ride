@@ -28,7 +28,7 @@ from __future__ import annotations
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Literal, Optional
+from typing import Dict, List, Literal, Optional
 
 # --- import path bootstrap: allow direct imports from backend/ -------------
 _BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -179,6 +179,22 @@ class HelpBotStepRequest(BaseModel):
     responder_transcript: str = ""
 
 
+class ChatMessage(BaseModel):
+    role: str = "user"
+    content: str
+
+
+class ResponderChatRequest(BaseModel):
+    incident_id: str
+    responder_id: str
+    message: str
+    chat_history: Optional[List[ChatMessage]] = []
+
+
+ResponderChatRequest.model_rebuild()
+ChatMessage.model_rebuild()
+
+
 router = APIRouter(prefix="/api/v1", tags=["Emergency Network"])
 
 
@@ -304,6 +320,11 @@ async def analyze_emergency_triage(
         "anticipated_condition": triage_res.get("anticipated_condition", ""),
         "severity_tier": triage_res.get("severity_tier", "moderate"),
         "injury_type_flags": triage_res.get("injury_type_flags", []),
+        "clinical_category": triage_res.get("clinical_category"),
+        "clinical_condition": triage_res.get("clinical_condition"),
+        "dispatch_responder": triage_res.get("dispatch_responder", True),
+        "request_ambulance": triage_res.get("request_ambulance", False),
+        "escalate_bhu": triage_res.get("escalate_bhu", False),
         "voice_signals": triage_res.get("voice_signals", ""),
         "image_signals": triage_res.get("image_signals", ""),
         "confidence": triage_res.get("confidence", 0.9),
@@ -464,6 +485,17 @@ async def report_emergency(
         except Exception:
             incident.first_aid_guidance = [l.strip() for l in first_aid_guidance.splitlines() if l.strip()]
 
+    # Clinical rules engine pass
+    eval_res = slice_runner.evaluate_clinical_dispatch(
+        incident.injury_type_flags,
+        f"{incident.voice_transcript or ''} {incident.detected_emergency or ''} {incident.anticipated_condition or ''}",
+        incident.severity_tier
+    )
+    incident.clinical_category = eval_res["clinical_category"]
+    incident.clinical_condition = eval_res["clinical_condition"]
+    incident.dispatch_responder = eval_res["dispatch_responder"]
+    incident.ambulance_requested = eval_res["request_ambulance"]
+
     # Module 3 canonical entry: match + notify + busy-mark + ack timer
     decision = dispatch_service.dispatchIncident(incident)
     record = slice_runner.logIncident(incident, decision)
@@ -479,6 +511,10 @@ async def report_emergency(
         record["incident"]["first_aid_guidance"] = incident.first_aid_guidance
     if incident.injury_type_flags:
         record["incident"]["injury_type_flags"] = incident.injury_type_flags
+    record["incident"]["clinical_category"] = incident.clinical_category
+    record["incident"]["clinical_condition"] = incident.clinical_condition
+    record["incident"]["dispatch_responder"] = incident.dispatch_responder
+    record["incident"]["ambulance_requested"] = incident.ambulance_requested
 
     # Module 6.5: PostgreSQL archive (non-fatal — memory state commits first).
     db_persisted = True
@@ -498,6 +534,9 @@ async def report_emergency(
             "notify_bhu": decision.notify_bhu,
             "bhu_urgency": decision.bhu_urgency,
             "ambulance_requested": decision.ambulance_requested,
+            "dispatch_responder": decision.dispatch_responder,
+            "clinical_category": decision.clinical_category,
+            "clinical_condition": decision.clinical_condition,
             "reasoning": decision.reasoning,
         },
         "db_persisted": db_persisted,
@@ -607,6 +646,135 @@ def responder_respond(payload: ResponderActionRequest):
         "dispatch_events": updated.get("dispatch_events", []),
         "responder_status_after": _responder_status(payload.responder_id),
     }
+
+
+# ===========================================================================
+# 3.5 RESPONDER CHAT COPILOT — Conversational AI First-Aid Assistant
+# ===========================================================================
+
+@router.post("/responder/chat")
+async def responder_chat(request: Request):
+    try:
+        if isinstance(request, Request):
+            payload = await request.json()
+        elif isinstance(request, dict):
+            payload = request
+        elif hasattr(request, "model_dump"):
+            payload = request.model_dump()
+        else:
+            payload = {}
+    except Exception:
+        payload = {}
+
+    print(" [COPILOT REQUEST]", payload)
+
+    try:
+        incident_id = str(payload.get("incident_id") or "INC-DEMO-ACTIVE")
+        responder_id = str(payload.get("responder_id") or "RESP-TAM-01")
+        message = str(payload.get("message") or "").strip()
+        raw_history = payload.get("chat_history") or []
+
+        record = _fresh_record(incident_id)
+        incident = (record or {}).get("incident", {})
+        
+        # Extract dynamic incident context
+        condition = (
+            incident.get("clinical_condition")
+            or incident.get("anticipated_condition")
+            or incident.get("detected_emergency")
+            or (", ".join(incident.get("injury_type_flags", [])) if incident.get("injury_type_flags") else None)
+            or "general_trauma"
+        )
+        tier = incident.get("severity_tier") or "moderate"
+        village = (
+            incident.get("gps_location", {}).get("village_id")
+            if isinstance(incident.get("gps_location"), dict)
+            else getattr(incident.get("gps_location"), "village_id", "TAMMAN")
+        ) or "TAMMAN"
+        ambulance_requested = bool(incident.get("ambulance_requested", False))
+
+        context = {
+            "condition": condition,
+            "clinical_condition": condition,
+            "tier": tier,
+            "severity_tier": tier,
+            "village": village,
+            "ambulance_requested": ambulance_requested,
+        }
+
+        history_payload = []
+        for m in raw_history:
+            if isinstance(m, dict):
+                history_payload.append({
+                    "role": m.get("role", "user"),
+                    "content": m.get("content") or m.get("text", "")
+                })
+            elif hasattr(m, "role") and hasattr(m, "content"):
+                history_payload.append({
+                    "role": m.role,
+                    "content": m.content
+                })
+
+        if not message:
+            return {
+                "incident_id": incident_id,
+                "responder_id": responder_id,
+                "reply": "وعلیکم السلام۔ میں طبی اے آئی کوپائلٹ ہوں۔ مریض کی حالت بتائیں تاکہ میں آپ کو ابتدائی طبی امداد کی رہنمائی فراہم کر سکوں۔",
+                "audio_url": None,
+                "escalated": False,
+                "steps": []
+            }
+
+        res = slice_runner.gemini_responder_chat(
+            incident_id=incident_id,
+            responder_id=responder_id,
+            message=message,
+            chat_history=history_payload,
+            context=context
+        )
+
+        if res.get("escalated", False) and record:
+            try:
+                escalation_snapshot = help_bot_service.escalateIncident(
+                    incident_id, {
+                        "trigger": "condition_worsening",
+                        "suggested_tier": "critical",
+                        "new_flags": ["condition_worsening"],
+                        "transcript_excerpt": message,
+                    })
+                dispatch_service.handleEscalation(incident_id, escalation_snapshot)
+            except Exception as esc_err:
+                _warn(f"Could not escalate incident {incident_id}: {esc_err}")
+
+        # Audio enhancement: Urdu TTS for the FULL reply (markdown stripped
+        # inside speakGuidance so no "asterisk asterisk" is vocalised).
+        # Disk-cached, and never fails the turn — text replies stand alone.
+        audio_url = None
+        try:
+            audio_url, _ = _best_effort_audio(res.get("reply", ""))
+        except Exception:
+            pass
+
+        return {
+            "incident_id": incident_id,
+            "responder_id": responder_id,
+            "reply": res.get("reply", ""),
+            "audio_url": audio_url,
+            "escalated": res.get("escalated", False),
+            "steps": res.get("steps", [])
+        }
+    except Exception as e:
+        print("❌ [COPILOT ERROR]:", repr(e))
+        import traceback
+        traceback.print_exc()
+        return JSONResponse(
+            status_code=500,
+            content={
+                "code": "COPILOT_ERROR",
+                "message": str(e),
+                "detail": str(e)
+            }
+        )
 
 
 # ===========================================================================

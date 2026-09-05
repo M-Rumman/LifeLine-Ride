@@ -190,6 +190,143 @@ else:
 SeverityTier = Literal["minor", "moderate", "critical"]
 OutcomeType = Literal["self-resolved", "taken_to_bhu", "referred_to_hospital", "unresolved"]
 AvailabilityStatus = Literal["unverified", "available", "busy", "offline"]
+ClinicalCategory = Literal["CATEGORY_A", "CATEGORY_B", "CATEGORY_C"]
+
+
+# ===========================================================================
+# CLINICAL DISPATCH TAXONOMY (Rules Engine for Ambulance vs. Responder-Only)
+# ===========================================================================
+
+# Category A: DUAL DISPATCH (Both Local Responder + Ambulance Escalated)
+# High-acuity life threats where immediate hospital transport is vital
+CATEGORY_A_CONDITIONS = {
+    "cardiac_arrest": ["cardiac_arrest", "cardiac arrest", "heart stopped", "no pulse", "no heartbeat", "دل بند", "سی پی آر", "نبض نہیں"],
+    "heart_attack": ["heart_attack", "heart attack", "myocardial_infarction", "chest pain", "دل کا دورہ", "سینے میں درد"],
+    "stroke": ["stroke", "acute_paralysis", "paralysis", "cva", "facial_droop", "فالج", "لقوہ", "فالج کا حملہ"],
+    "unresponsive": ["unresponsive", "unconscious", "unconsciousness", "loss_of_consciousness", "coma", "not_breathing", "no_breathing", "بے ہوش", "بے ہوشی", "سانس نہیں"],
+    "choking": ["choking", "airway_blockage", "airway_obstruction", "airway_compromise", "asphyxiation", "foreign_body_airway", "دم گھٹنا", "گلے میں پھنسنا", "سانس بند"],
+    "snakebite": ["snakebite", "snake_bite", "venomous_snake_bite", "puncture_wounds", "سانپ", "سانپ کا کاٹنا", "ڈس لیا"],
+    "gunshot_wound": ["gunshot_wound", "gunshot", "penetrating_trauma", "bullet_wound", "shooting", "گولی", "گولی کا زخم", "فائرنگ"],
+    "severe_amputation": ["severe_amputation", "traumatic_amputation", "amputation", "limb_cut", "machine_entanglement", "اعضاء کا کٹ جانا", "کٹ گیا", "ہاتھ کٹ گیا", "ٹانگ کٹ گئی"],
+    "arterial_hemorrhage": ["arterial_hemorrhage", "heavy_bleeding", "uncontrolled_heavy_bleeding", "critical_hemorrhage", "exsanguination", "pulsatile_bleeding", "پھوٹتا ہوا خون", "خون کا فوارہ", "خون نہیں رک رہا"],
+}
+
+# Category B: SINGLE DISPATCH (Local Volunteer Responder Only)
+# Manageable physical trauma needing on-scene first aid, splinting, dressing, or stabilization
+CATEGORY_B_CONDITIONS = {
+    "closed_fracture": ["closed_fracture", "fracture", "severe_sprain", "sprain", "bone_break", "broken_bone", "dislocation", "fracture_indicator", "swelling", "ہڈی کا ٹوٹنا", "بند ہڈی کا ٹوٹنا", "موچ", "فریکچر"],
+    "controlled_deep_laceration": ["controlled_deep_laceration", "deep_laceration", "deep_cut", "laceration", "deep_open_wound", "major_trauma", "گہرا کٹ", "کٹ جس میں خون کنٹرول میں ہو", "گہرا زخم"],
+    "second_degree_burn": ["second_degree_burn", "burn", "scald", "thermal_burn", "partial_thickness_burn", "چھالے", "جلنا", "جھلس جانا"],
+    "head_injury_conscious": ["head_injury_conscious", "head_injury", "concussion", "ہوش میں سر کی چوٹ", "سر پر چوٹ"],
+    "heat_exhaustion": ["heat_exhaustion", "severe_dehydration", "dehydration", "heat_stroke_early", "heat_cramps", "گرمی اور پانی کی کمی", "لو لگنا", "گرمی لگنا"],
+}
+
+# Category C: ZERO DISPATCH (Self-Care Home Guidance Only)
+# Superficial minor injuries
+CATEGORY_C_CONDITIONS = {
+    "bruise": ["bruise", "contusion", "hematoma", "چوٹ", "نیلاہٹ"],
+    "minor_cut": ["minor_cut", "superficial_scratch", "abrasion", "scratch", "mild_trauma", "superficial_cut", "minor_scrape", "خراش", "معمولی کٹ", "ہلکی چوٹ"],
+}
+
+
+def evaluate_clinical_dispatch(
+    injury_flags: Optional[List[str]] = None,
+    text_or_condition: str = "",
+    severity_tier: Optional[str] = None,
+) -> dict:
+    """Evaluates clinical urgency taxonomy to decide dispatch resources:
+
+    Category A (DUAL DISPATCH):
+      Airway compromise, critical hemorrhage, severe venom/poisoning, rapid organ failure,
+      or traumatic loss of consciousness:
+      -> { dispatch_responder: True, request_ambulance: True, escalate_bhu: True, clinical_category: "CATEGORY_A", clinical_condition: ... }
+
+    Category B (SINGLE DISPATCH):
+      Manageable physical trauma needing on-scene first aid / splinting / dressing:
+      -> { dispatch_responder: True, request_ambulance: False, escalate_bhu: False, clinical_category: "CATEGORY_B", clinical_condition: ... }
+
+    Category C (ZERO DISPATCH):
+      Superficial injuries suitable for home self-care:
+      -> { dispatch_responder: False, request_ambulance: False, escalate_bhu: False, clinical_category: "CATEGORY_C", clinical_condition: ... }
+    """
+    flags = [str(f).lower().strip() for f in (injury_flags or [])]
+    text = (text_or_condition or "").lower()
+
+    # 1. Match Category A (Highest Urgency - Dual Dispatch)
+    for cond_name, keywords in CATEGORY_A_CONDITIONS.items():
+        if any(f == cond_name or f in keywords for f in flags) or any(kw in text for kw in keywords):
+            return {
+                "dispatch_responder": True,
+                "request_ambulance": True,
+                "escalate_bhu": True,
+                "clinical_category": "CATEGORY_A",
+                "category_label": "DUAL_DISPATCH",
+                "clinical_condition": cond_name,
+            }
+
+    # 2. Match Category B (Single Dispatch - Local Responder Only)
+    for cond_name, keywords in CATEGORY_B_CONDITIONS.items():
+        if any(f == cond_name or f in keywords for f in flags) or any(kw in text for kw in keywords):
+            return {
+                "dispatch_responder": True,
+                "request_ambulance": False,
+                "escalate_bhu": False,
+                "clinical_category": "CATEGORY_B",
+                "category_label": "SINGLE_DISPATCH",
+                "clinical_condition": cond_name,
+            }
+
+    # 3. Match Category C (Zero Dispatch - Self-Care Home Guidance)
+    for cond_name, keywords in CATEGORY_C_CONDITIONS.items():
+        if any(f == cond_name or f in keywords for f in flags) or any(kw in text for kw in keywords):
+            return {
+                "dispatch_responder": False,
+                "request_ambulance": False,
+                "escalate_bhu": False,
+                "clinical_category": "CATEGORY_C",
+                "category_label": "ZERO_DISPATCH",
+                "clinical_condition": cond_name,
+            }
+
+    # 4. Fallback based on severity tier
+    tier = (severity_tier or "").lower()
+    if tier == "critical":
+        return {
+            "dispatch_responder": True,
+            "request_ambulance": True,
+            "escalate_bhu": True,
+            "clinical_category": "CATEGORY_A",
+            "category_label": "DUAL_DISPATCH",
+            "clinical_condition": flags[0] if flags else "unspecified_critical",
+        }
+    elif tier == "moderate":
+        return {
+            "dispatch_responder": True,
+            "request_ambulance": False,
+            "escalate_bhu": False,
+            "clinical_category": "CATEGORY_B",
+            "category_label": "SINGLE_DISPATCH",
+            "clinical_condition": flags[0] if flags else "unspecified_moderate",
+        }
+    elif tier == "minor":
+        return {
+            "dispatch_responder": False,
+            "request_ambulance": False,
+            "escalate_bhu": False,
+            "clinical_category": "CATEGORY_C",
+            "category_label": "ZERO_DISPATCH",
+            "clinical_condition": flags[0] if flags else "unspecified_minor",
+        }
+
+    # Default fallback: safe single dispatch
+    return {
+        "dispatch_responder": True,
+        "request_ambulance": False,
+        "escalate_bhu": False,
+        "clinical_category": "CATEGORY_B",
+        "category_label": "SINGLE_DISPATCH",
+        "clinical_condition": "unspecified",
+    }
 
 
 class GPSLocation(BaseModel):
@@ -246,6 +383,10 @@ class Incident(BaseModel):
     detected_emergency: Optional[str] = None
     anticipated_condition: Optional[str] = None
     first_aid_guidance: Optional[List[str]] = None
+    # ADDITIVE: Clinical dispatch rules engine categorization
+    clinical_condition: Optional[str] = None
+    clinical_category: Optional[ClinicalCategory] = None
+    dispatch_responder: bool = True
 
 
 
@@ -277,7 +418,10 @@ class DispatchResult(BaseModel):
     responder: Optional[Responder]
     bhu: Optional[BHU]
     ambulance_requested: bool
-    status: Literal["dispatched", "escalated_bhu_only", "no_responders_available"]
+    status: Literal["dispatched", "escalated_bhu_only", "no_responders_available", "no_resources", "self_care_only"]
+    dispatch_responder: bool = True
+    clinical_category: Optional[str] = None
+    clinical_condition: Optional[str] = None
 
 
 # ==========================================
@@ -1169,8 +1313,23 @@ def _combine_triage_signals(transcript: str, vision: dict) -> dict:
 # ---------------------- Multimodal Anticipation ----------------------------
 
 MULTIMODAL_ANTICIPATION_PROMPT = (
-    "You are an emergency triage coordinator for a rural first-responder dispatch network.\n"
+    "You are an emergency triage clinical coordinator for a rural first-responder dispatch network.\n"
     "Analyze the distress inputs provided (audio voice note / Urdu transcript, and/or incident photo).\n"
+    "\n"
+    "CLINICAL DISPATCH TAXONOMY:\n"
+    "- Category A: DUAL DISPATCH (Both Local Responder + Ambulance Escalated)\n"
+    "  High-acuity life threats: cardiac_arrest/heart_attack, stroke/paralysis, unresponsive/unconsciousness, "
+    "  choking/airway_blockage, snakebite, gunshot_wound/penetrating_trauma, severe_amputation, arterial_hemorrhage/uncontrolled_heavy_bleeding.\n"
+    "  -> severity_tier: 'critical', request_ambulance: true, dispatch_responder: true, escalate_bhu: true\n"
+    "\n"
+    "- Category B: SINGLE DISPATCH (Local Volunteer Responder Only)\n"
+    "  Manageable physical trauma: closed_fracture/severe_sprain, controlled_deep_laceration, second_degree_burn, "
+    "  head_injury_conscious, heat_exhaustion/severe_dehydration.\n"
+    "  -> severity_tier: 'moderate', request_ambulance: false, dispatch_responder: true, escalate_bhu: false\n"
+    "\n"
+    "- Category C: ZERO DISPATCH (Self-Care Home Guidance Only)\n"
+    "  Superficial minor injuries: bruise, contusion, minor_cut, superficial_scratch.\n"
+    "  -> severity_tier: 'minor', request_ambulance: false, dispatch_responder: false, escalate_bhu: false\n"
     "\n"
     "PRIORITY RULES:\n"
     "1. Prioritize the actual dictated voice transcript or spoken audio over any generic, absent, or mismatching photo. "
@@ -1182,20 +1341,27 @@ MULTIMODAL_ANTICIPATION_PROMPT = (
     "   Example simplified output for gunshot wound ('مجھے گولی لگی ہے'):\n"
     "   - detected_emergency: 'شدید ایمرجنسی - گولی کا زخم (Critical Emergency - Gunshot Wound)'\n"
     "   - anticipated_condition: 'مریض کو گولی لگی ہے اور خون بہہ رہا ہے۔ فوری ہسپتال منتقلی اور ایمبولینس کی ضرورت ہے۔ (Patient has a gunshot wound with active bleeding. Immediate ambulance and hospital transfer required.)'\n"
+    "   - clinical_condition: 'gunshot_wound'\n"
+    "   - clinical_category: 'CATEGORY_A'\n"
     "   - injury_type_flags: ['penetrating_trauma', 'gunshot_wound', 'heavy_bleeding']\n"
     "   - severity_tier: 'critical'\n"
     "\n"
     "CRITICAL TRIAGE MAPPINGS:\n"
-    "- If transcript or voice mentions 'گولی' / gunshot / bullet / shooting: assign severity_tier 'critical', and include 'penetrating_trauma', 'gunshot_wound', 'heavy_bleeding' in injury_type_flags.\n"
-    "- If transcript mentions snakebite ('سانپ'): assign severity_tier 'critical', flags ['venomous_snake_bite', 'puncture_wounds'].\n"
+    "- If transcript or voice mentions 'گولی' / gunshot / bullet / shooting: assign severity_tier 'critical', clinical_condition 'gunshot_wound', clinical_category 'CATEGORY_A', and include 'penetrating_trauma', 'gunshot_wound', 'heavy_bleeding' in injury_type_flags.\n"
+    "- If transcript mentions snakebite ('سانپ'): assign severity_tier 'critical', clinical_condition 'snakebite', clinical_category 'CATEGORY_A', flags ['venomous_snake_bite', 'puncture_wounds'].\n"
     "- If unconsciousness, severe bleed, or major fracture/trauma: assign severity_tier 'critical' or 'moderate' appropriately.\n"
     "\n"
     "Respond with ONLY a JSON object formatted strictly as follows (no markdown wrap, no other text):\n"
     "{\n"
     '  "detected_emergency": "<Simple title in Urdu and English, e.g. شدید ایمرجنسی - گولی کا زخم (Critical Emergency - Gunshot Wound)>",\n'
     '  "anticipated_condition": "<1-2 plain sentences in Urdu + English explaining condition without medical jargon>",\n'
+    '  "clinical_condition": "<e.g. gunshot_wound, snakebite, cardiac_arrest, closed_fracture, second_degree_burn, bruise, etc.>",\n'
+    '  "clinical_category": "<CATEGORY_A|CATEGORY_B|CATEGORY_C>",\n'
     '  "severity_tier": "<minor|moderate|critical>",\n'
     '  "injury_type_flags": ["<snake_case tags, e.g. penetrating_trauma, gunshot_wound, heavy_bleeding>"],\n'
+    '  "dispatch_responder": <true|false>,\n'
+    '  "request_ambulance": <true|false>,\n'
+    '  "escalate_bhu": <true|false>,\n'
     '  "voice_signals": "<what was heard or deduced from the speech/transcript>",\n'
     '  "image_signals": "<what was observed from the photo, or \'No photo provided\'>",\n'
     '  "confidence": 0.95,\n'
@@ -1295,6 +1461,18 @@ def gemini_anticipate_condition(
             if jargon in cond.lower():
                 data["anticipated_condition"] = "مریض کو گولی لگی ہے اور خون بہہ رہا ہے۔ فوری ہسپتال منتقلی اور ایمبولینس کی ضرورت ہے۔ (Patient has a gunshot wound with active bleeding. Immediate ambulance and hospital transfer required.)"
                 break
+
+    # Clinical rules engine pass: ensure strict taxonomy alignment
+    eval_res = evaluate_clinical_dispatch(
+        data.get("injury_type_flags", []),
+        f"{transcript or ''} {data.get('detected_emergency', '')} {data.get('anticipated_condition', '')}",
+        data.get("severity_tier"),
+    )
+    data["clinical_category"] = eval_res["clinical_category"]
+    data["clinical_condition"] = eval_res["clinical_condition"]
+    data["dispatch_responder"] = eval_res["dispatch_responder"]
+    data["request_ambulance"] = eval_res["request_ambulance"]
+    data["escalate_bhu"] = eval_res["escalate_bhu"]
 
     return data
 
@@ -1444,9 +1622,25 @@ def matchResponderAndBHU(incident: Incident) -> tuple[Optional[Responder], Optio
 def dispatch(incident: Incident, responder: Optional[Responder], bhu: Optional[BHU]) -> DispatchResult:
     now_iso = datetime.now(timezone.utc).isoformat()
     tier = incident.severity_tier
-    ambulance_requested = (tier == "critical")
 
-    if responder:
+    # Clinical rules engine evaluation
+    eval_res = evaluate_clinical_dispatch(
+        incident.injury_type_flags,
+        f"{incident.voice_transcript or ''} {incident.detected_emergency or ''} {incident.anticipated_condition or ''}",
+        incident.severity_tier
+    )
+
+    ambulance_requested = eval_res["request_ambulance"]
+    dispatch_responder = eval_res["dispatch_responder"]
+    clinical_cat = eval_res["clinical_category"]
+    clinical_cond = eval_res["clinical_condition"]
+
+    incident.clinical_category = clinical_cat
+    incident.clinical_condition = clinical_cond
+    incident.dispatch_responder = dispatch_responder
+    incident.ambulance_requested = ambulance_requested
+
+    if dispatch_responder and responder:
         incident.responder_assigned_id = responder.responder_id
         incident.responder_dispatch_timestamp = now_iso
         # CRITICAL FIX: Mutate state to busy so responder cannot be double-assigned
@@ -1464,13 +1658,17 @@ def dispatch(incident: Incident, responder: Optional[Responder], bhu: Optional[B
         except Exception as exc:
             print(f"  [DISPATCH WARNING] DB write-through for busy status failed (non-fatal): {exc}")
 
-    if tier in ["moderate", "critical"]:
+    if eval_res["escalate_bhu"] or ambulance_requested:
+        incident.bhu_notified = True
+        incident.bhu_notify_timestamp = now_iso
+    elif tier in ["moderate", "critical"] and not incident.bhu_notified:
         incident.bhu_notified = True
         incident.bhu_notify_timestamp = now_iso
 
-    incident.ambulance_requested = ambulance_requested
-
-    if responder:
+    if not dispatch_responder and not ambulance_requested:
+        status = "self_care_only"
+        print(f"  [DISPATCH LOG] Self-care only for {incident.incident_id} ({clinical_cond}). No emergency dispatch required.")
+    elif responder and dispatch_responder:
         status = "dispatched"
         print(f"  [DISPATCH LOG] Assigned: {responder.name} ({responder.responder_id}) -> Status set to BUSY.")
     else:
@@ -1478,16 +1676,19 @@ def dispatch(incident: Incident, responder: Optional[Responder], bhu: Optional[B
         print(f"  [DISPATCH WARNING] No responders available in {incident.gps_location.village_id}. Escalated to {bhu.name if bhu else 'None'}.")
 
     if incident.bhu_notified and bhu:
-        print(f"  [DISPATCH LOG] {bhu.name} notified ({'Standby' if tier == 'moderate' else 'Urgent'}).")
+        print(f"  [DISPATCH LOG] {bhu.name} notified ({'Standby' if not ambulance_requested else 'Urgent'}).")
 
     if ambulance_requested:
         print(f"  [DISPATCH ALERT] Ambulance requested immediately for {incident.incident_id}.")
 
     return DispatchResult(
         incident_id=incident.incident_id,
-        responder=responder,
+        responder=responder if dispatch_responder else None,
         bhu=bhu,
         ambulance_requested=ambulance_requested,
+        dispatch_responder=dispatch_responder,
+        clinical_category=clinical_cat,
+        clinical_condition=clinical_cond,
         status=status
     )
 
@@ -1500,6 +1701,182 @@ def logIncident(incident: Incident, dispatch_result: DispatchResult) -> dict:
     }
     INCIDENT_STORE.append(record)
     return record
+
+
+# ===========================================================================
+# 3.5 RESPONDER CONVERSATIONAL AI COPILOT
+# ===========================================================================
+
+RESPONDER_COPILOT_SYSTEM_PROMPT = """
+You are an expert Emergency Medical First-Aid Copilot assisting a community volunteer responder in rural Pakistan.
+
+DYNAMIC INCIDENT CONTEXT:
+- Patient Condition: {condition}
+- Triage Tier: {tier}
+- Village: {village}
+- Ambulance En Route: {ambulance_requested}
+
+INSTRUCTION STYLE & RULES:
+1. Answer in plain, clear, calming Urdu ONLY. Never write English words, Latin script or parenthetical English glosses — every reply is spoken aloud by an Urdu TTS voice, so any Latin text would be pronounced in English. Use Urdu words for kit supplies (e.g. 'پٹی', 'صاف کپڑا', 'دباؤ').
+2. Maximum 2–4 numbered steps per reply.
+3. Prioritize immediate, life-saving physical actions using standard first-aid kit supplies (gauze, pressure bandage, splints, tourniquet, ORS, clean water) — named in Urdu.
+4. Direct, reassuring tone focused on on-scene stabilizer actions.
+
+STRICT CLINICAL SAFETY BOUNDARIES:
+- Volunteer responders CANNOT prescribe prescription medications (e.g. antibiotics, strong analgesics, injections, IV drugs) or perform invasive surgical interventions (e.g. suturing, wound cutting, surgical procedures).
+- If asked for prescription medications, surgery, suturing, or any out-of-scope invasive procedures, you MUST respond with this exact boundary refusal message:
+"یہ طریقہ کار فیلڈ رسپانڈر کے دائرہ اختیار سے باہر ہے۔ مریض کو مستحکم رکھیں اور ہسپتال/ایمبولینس کے پہنچنے کا انتظار کریں۔"
+(You may follow with non-invasive supportive stabilization measures, but NEVER suggest specific prescription drugs or surgical steps).
+""".strip()
+
+OUT_OF_SCOPE_PHRASES = [
+    "prescription", "antibiotic", "medicine", "injection", "painkiller",
+    "surgery", "surgical", "suture", "stitches", "stitch", "incision",
+    "ٹانکے", "دوا", "گولی", "انجکشن", "سرجری", "آپریشن", "نس کاٹنا", "اینٹی بائیوٹک",
+    "پین کلر", "تسکین بخش دوا"
+]
+
+def _is_out_of_scope_request(query: str) -> bool:
+    q = query.lower()
+    return any(p in q for p in OUT_OF_SCOPE_PHRASES)
+
+def gemini_responder_chat(
+    incident_id: str,
+    responder_id: str,
+    message: str,
+    chat_history: Optional[List[dict]] = None,
+    context: Optional[dict] = None
+) -> dict:
+    """Conversational AI Copilot for field responders.
+    
+    Uses GEMINI_FLASH_MODEL with temperature 0.2 and strict clinical safety boundaries.
+    Provides offline/fail-safe fallback responses for resilient field operations.
+    """
+    ctx = context or {}
+    condition = ctx.get("condition") or ctx.get("clinical_condition") or "general_trauma"
+    tier = ctx.get("tier") or ctx.get("severity_tier") or "moderate"
+    village = ctx.get("village") or "Tamman / Rural Union Council"
+    ambulance_requested = "Yes (Ambulance En Route)" if ctx.get("ambulance_requested") else "No (Local Responder Only)"
+
+    # Strict Safety Boundary Check
+    if _is_out_of_scope_request(message):
+        safety_reply = (
+            "یہ طریقہ کار فیلڈ رسپانڈر کے دائرہ اختیار سے باہر ہے۔ "
+            "مریض کو مستحکم رکھیں اور ہسپتال/ایمبولینس کے پہنچنے کا انتظار کریں۔\n\n"
+            "1. مریض کو پرسکون اور آرام دہ پوزیشن میں رکھیں۔\n"
+            "2. کوئی بھی غیر مجاز یا نسخہ والی دوا ہرگز نہ دیں۔\n"
+            "3. مریض کی نبض اور سانس کو مسلسل مانیٹر کریں۔"
+        )
+        return {
+            "incident_id": incident_id,
+            "responder_id": responder_id,
+            "reply": safety_reply,
+            "escalated": False,
+            "steps": [
+                "مریض کو پرسکون اور آرام دہ پوزیشن میں رکھیں۔",
+                "کوئی بھی غیر مجاز یا نسخہ والی دوا ہرگز نہ دیں۔",
+                "مریض کی نبض اور سانس کو مسلسل مانیٹر کریں۔"
+            ]
+        }
+
+    formatted_sys_prompt = RESPONDER_COPILOT_SYSTEM_PROMPT.format(
+        condition=condition,
+        tier=tier,
+        village=village,
+        ambulance_requested=ambulance_requested
+    )
+
+    # Check for worsening/escalation indicators
+    msg_lower = message.lower()
+    is_escalated = any(k in msg_lower for k in [
+        "خون نہیں رک رہا", "بے ہوش", "نبض مدہم", "سانس بند", "حالت خراب",
+        "bleeding not stopping", "unconscious", "pulse weakening", "no pulse"
+    ])
+
+    try:
+        from google.genai import types
+        client = _gemini_client()
+        model_name = _normalize_gemini_model(
+            os.environ.get("GEMINI_FLASH_MODEL", "gemini-3.1-flash-lite")
+        )
+
+        # Build contents from history + current message
+        contents = []
+        if chat_history:
+            for turn in chat_history[-6:]:
+                role = "user" if turn.get("role") in ("user", "responder") else "model"
+                content = str(turn.get("content") or turn.get("text") or "").strip()
+                if content:
+                    contents.append(types.Content(
+                        role=role,
+                        parts=[types.Part.from_text(text=content)]
+                    ))
+
+        contents.append(types.Content(
+            role="user",
+            parts=[types.Part.from_text(text=message)]
+        ))
+
+        print(f"  [COPILOT CALL] Invoking Gemini model '{model_name}' (temp=0.2)")
+        resp = _call_with_retry(lambda: client.models.generate_content(
+            model=model_name,
+            contents=contents,
+            config=types.GenerateContentConfig(
+                system_instruction=formatted_sys_prompt,
+                temperature=0.2,
+            )
+        ), "responder_chat")
+
+        reply_text = (resp.text or "").strip()
+        if not reply_text:
+            raise RuntimeError("Gemini returned empty response")
+
+        return {
+            "incident_id": incident_id,
+            "responder_id": responder_id,
+            "reply": reply_text,
+            "escalated": is_escalated,
+            "steps": [line.strip() for line in reply_text.splitlines() if line.strip() and line.strip()[0].isdigit()]
+        }
+
+    except Exception as exc:
+        print(f"  [COPILOT WARN] Gemini chat fallback engaged: {exc}")
+        # Robust clinical fallback for offline/test environments
+        if "خون" in message or "bleed" in msg_lower:
+            fallback_reply = (
+                "1. صاف کپڑے یا پٹی سے زخم پر براہِ راست مضبوط دباؤ ڈالیں۔\n"
+                "2. پٹی مضبوطی سے باندھیں تاکہ خون رکے۔\n"
+                "3. زخمی حصے کو دل کی سطح سے اونچا رکھیں اور مریض کو ہلنے نہ دیں۔\n"
+                "4. اگر خون نہ رکے تو زخم کے اوپر مضبوط پٹی باندھ کر خون روکیں۔"
+            )
+        elif "نبض" in message or "pulse" in msg_lower:
+            fallback_reply = (
+                "1. مریض کو فوراً ہموار جگہ پر لٹائیں اور ٹانگیں اونچی کریں تاکہ خون سر کی طرف جائے۔\n"
+                "2. مریض کو کمبل سے ڈھانپیں تاکہ جسم کا درجہ حرارت برقرار رہے۔\n"
+                "3. گردن اور سینے کے ارد گرد تنگ کپڑے ڈھیلے کریں۔\n"
+                "4. نبض اور سانس کی رفتار پر مسلسل نظر رکھیں۔"
+            )
+        elif "بے ہوش" in message or "unconscious" in msg_lower:
+            fallback_reply = (
+                "1. مریض کو فوری بائیں کروٹ لٹائیں تاکہ سانس کی نالی کھلی رہے۔\n"
+                "2. سر کو ہلکا سا پیچھے جھکائیں اور ٹھوڑی کو اوپر اٹھائیں۔\n"
+                "3. مریض کے منہ میں کھانے پینے کی کوئی چیز بالکل نہ ڈالیں۔\n"
+                "4. نبض اور سانس کو ہر ایک منٹ بعد چیک کریں۔"
+            )
+        else:
+            fallback_reply = (
+                f"1. جائے وقوعہ کا جائزہ لیں اور مریض کی سانس کی نالی کھلی رکھیں۔\n"
+                f"2. بنیادی فرسٹ ایڈ کٹ سے متاثرہ حصے کو مستحکم کریں۔\n"
+                f"3. مریض کے وائٹلز نوٹ کریں اور ایمبولینس کی آمد تک ساتھ رہیں۔"
+            )
+
+        return {
+            "incident_id": incident_id,
+            "responder_id": responder_id,
+            "reply": fallback_reply,
+            "escalated": is_escalated,
+            "steps": [line.strip() for line in fallback_reply.splitlines() if line.strip()]
+        }
 
 
 # ==========================================

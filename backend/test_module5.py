@@ -137,7 +137,7 @@ def _db_reset() -> None:
     truncate_point_transactions_table()
     slice_runner.INCIDENT_STORE.clear()
     for r in slice_runner.SEED_RESPONDERS:
-        r.current_availability_status = _original_availability[r.responder_id]
+        r.current_availability_status = _original_availability.get(r.responder_id, "available")
     with _STATE_LOCK:
         _DISPATCH_STATE.clear()
     # Clearing _DISPATCH_STATE above drops the ack-timer references, so also

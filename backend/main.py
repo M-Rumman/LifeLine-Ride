@@ -49,7 +49,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 try:
-    sys.stdout.reconfigure(line_buffering=True)
+    sys.stdout.reconfigure(encoding="utf-8", errors="backslashreplace", line_buffering=True)
+    sys.stderr.reconfigure(encoding="utf-8", errors="backslashreplace", line_buffering=True)
 except Exception:
     pass
 
@@ -64,7 +65,7 @@ from dotenv import load_dotenv  # noqa: E402
 
 load_dotenv()
 
-from fastapi import FastAPI                       # noqa: E402
+from fastapi import FastAPI, Request              # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.staticfiles import StaticFiles        # noqa: E402
 
@@ -265,6 +266,11 @@ emergency.install_error_handlers(app)
 # Router already carries prefix="/api/v1".
 app.include_router(emergency.router)
 
+# Direct route alias to catch non-prefixed responder chat requests
+@app.post("/responder/chat")
+async def responder_chat_alias(request: Request):
+    return await emergency.responder_chat(request)
+
 # Media routes: mount uploads, photos, and voice directly, plus mockdata root
 if (_MEDIA_DIR / "media" / "uploads").is_dir():
     app.mount("/media/uploads", StaticFiles(directory=str(_MEDIA_DIR / "media" / "uploads")), name="media_uploads")
@@ -367,8 +373,8 @@ if __name__ == "__main__":
     except Exception:  # noqa: BLE001
         pass
 
-    _port = int(os.getenv("PORT", "5000"))
+    _port = int(os.getenv("PORT", "5050"))
     _ensure_port_available(_port)
     _log(f"Starting uvicorn on 0.0.0.0:{_port}")
-    uvicorn.run("main:app", host="0.0.0.0", port=_port, reload=False)
+    uvicorn.run("main:app", host="0.0.0.0", port=_port, reload=True, app_dir=str(_BACKEND_DIR))
 
