@@ -1,0 +1,1 @@
+`npm run dev` starts the Vite dev server; `npm run build` runs `tsc --noEmit` then `vite build`; `npm run typecheck` performs standalone TS checking; `npm run smoke [url]` and `npm run cors` exercise the built frontend against a backend endpoint.

@@ -1,0 +1,7 @@
+- Cross-module data exchange uses Pydantic `BaseModel` classes defined in `slice_runner.py` (`Incident`, `Responder`, `BHU`, `DispatchResult`, `GPSLocation`) rather than raw dicts.
+- AI provider selection is driven by environment variables (`TRIAGE_AI_PROVIDER`, `GEMINI_*_MODEL`, `DASHSCOPE_*_MODEL`) so switching providers requires no code changes.
+- Each AI step exposes paired `gemini_*` / `dashscope_*` implementations dispatched through a single public wrapper that falls back to a fail-safe line on error.
+- Every HTTP error response follows the uniform `{"code": <string>, "message": <detail>}` contract enforced by `install_error_handlers` in `routes/emergency.py`.
+- Deterministic testing uses disk caches: triage outputs are memoized under `mockdata/media/.triage_cache` keyed by photo+voice hash, and TTS audio is prewarmed into `mockdata/helpbot/tts_cache` to avoid quota usage during replay.
+- External dependencies (DashScope SDK, sounddevice, numpy) are imported lazily inside functions so the module can be imported and inspected even when optional packages are absent.
+- Startup bootstrap steps are individually wrapped in try/except blocks so each phase (seed, load status, rehydrate incidents, reconcile orphans) fails non-fatally and the app continues running on seed defaults if PostgreSQL is unreachable.

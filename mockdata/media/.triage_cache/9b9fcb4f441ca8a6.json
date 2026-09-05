@@ -1,0 +1,42 @@
+{
+  "severity_tier": "critical",
+  "injury_type_flags": [
+    "heavy_bleeding",
+    "major_trauma",
+    "deep_open_wound"
+  ],
+  "voice_transcript": "میرے ابو دیوار بنا رہے تھے ان کے اوپر بہت بڑا پتھر ٹانگ کے اوپر گر گیا ریت کا بلاک اور بہت بڑا زخم ہو چکا ہے بہت گہرا کوئی جلدی مدد کو آئے",
+  "triage_signals": [
+    {
+      "source": "stt",
+      "provider": "gemini",
+      "status": "ok",
+      "detail": "Live Urdu transcription (gemini-3.5-flash, gate run)"
+    },
+    {
+      "source": "vision",
+      "provider": "gemini",
+      "status": "ok",
+      "detail": {
+        "injury_classification": "heavy_bleeding",
+        "apparent_severity": "critical",
+        "confidence": 0.95,
+        "visible_signals": [
+          "Large, deep open wound on the anterior thigh with exposed simulated subdermal tissue",
+          "Significant volume of dark, pooled blood within the wound cavity",
+          "Torn trousers heavily saturated with blood around the injury site"
+        ],
+        "image_usable": true
+      }
+    },
+    {
+      "source": "classifier",
+      "provider": "gemini",
+      "status": "ok",
+      "detail": [
+        "Transcript: Reporter describes a large, heavy stone/sand block falling onto the victim's leg causing major trauma and a very deep wound.",
+        "Vision: Confirms critical severity with heavy bleeding, a large deep open wound with exposed tissue, and heavy blood saturation."
+      ]
+    }
+  ]
+}

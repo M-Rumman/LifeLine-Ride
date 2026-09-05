@@ -1,0 +1,362 @@
+{
+  "run_kind": "replay",
+  "script_title": "Branch fracture_crush: initial guidance -> step advance -> in-scope Q (no splint) -> in-scope Q (water/painkiller) -> out-of-scope Q (snakebite practice) -> escalation (unconscious + breathing)",
+  "incident_id": "INC-SIM-FRACTURE-CRUSH",
+  "branch_id": "fracture_crush",
+  "branch_matched": true,
+  "provider": "gemini",
+  "started_at": "2026-08-30T08:35:43.836555+00:00",
+  "finalized_at": "2026-08-30T08:37:50.900109+00:00",
+  "turns": [
+    {
+      "timestamp": "2026-08-30T08:35:43.836555+00:00",
+      "speaker": "bot",
+      "text": "میں لائف لائن ہیلپ بوٹ ہوں۔ یہ ہڈی کی چوٹ کا کیس ہے۔ مریض کو ہرگز ہلنے یا چلنے نہ دیں۔",
+      "tts_cached": true
+    },
+    {
+      "timestamp": "2026-08-30T08:35:52.507216+00:00",
+      "speaker": "bot",
+      "text": "زخمی ٹانگ یا بازو کو اسی حالت میں ساکت رکھیں، سیدھا کرنے کی کوشش ہرگز نہ کریں۔",
+      "tts_cached": true
+    },
+    {
+      "timestamp": "2026-08-30T08:35:59.737340+00:00",
+      "speaker": "bot",
+      "text": "پہلا قدم: مریض کو پرسکون لٹائیں اور زخمی حصہ بالکل نہ ہلائیں۔ جب مکمل ہو جائے تو کہیں، ہو گیا۔",
+      "tts_cached": true
+    },
+    {
+      "timestamp": "2026-08-30T08:36:09.647107+00:00",
+      "speaker": "responder",
+      "text": "مریض کو لٹا دیا ہے اور ٹانگ بالکل نہیں ہلا رہا"
+    },
+    {
+      "timestamp": "2026-08-30T08:36:14.618261+00:00",
+      "speaker": "bot",
+      "text": "دوسرا قدم: اگر کھلا زخم ہے تو صاف کپڑے سے ہلکا دباؤ ڈال کر خون روکیں، مگر ہڈی پر سیدھا زور نہ ڈالیں۔ جب مکمل ہو جائے تو کہیں، ہو گیا۔",
+      "tts_cached": true
+    },
+    {
+      "timestamp": "2026-08-30T08:36:27.167914+00:00",
+      "speaker": "responder",
+      "text": "یہاں کوئی تختہ یا سخت چیز نہیں مل رہی، کیا کروں؟"
+    },
+    {
+      "timestamp": "2026-08-30T08:36:31.385919+00:00",
+      "speaker": "bot",
+      "text": "اگر تختہ یا سخت چیز نہیں ملتی تو مریض کی دوسری صحیح ٹانگ کو سہارا بنائیں اور دونوں ٹانگوں کو نرم کپڑے سے آہستہ سے ساتھ باندھ دیں۔",
+      "tts_cached": true
+    },
+    {
+      "timestamp": "2026-08-30T08:36:41.983812+00:00",
+      "speaker": "responder",
+      "text": "مریض کو پانی یا درد کی گولی دے سکتے ہیں؟"
+    },
+    {
+      "timestamp": "2026-08-30T08:36:46.434746+00:00",
+      "speaker": "bot",
+      "text": "مریض کو کچھ کھانے پینے کو نہ دیں اور نہ کوئی گولی دیں۔ اگر اسپتال میں آپریشن کی ضرورت پڑی تو پیٹ خالی ہونا ضروری ہے۔",
+      "tts_cached": true
+    },
+    {
+      "timestamp": "2026-08-30T08:36:56.395560+00:00",
+      "speaker": "responder",
+      "text": "اگر کسی کو سانپ کاٹ لے تو کیا کٹنے کے اوپر پٹی باندھنی چاہیے؟"
+    },
+    {
+      "timestamp": "2026-08-30T08:37:00.506399+00:00",
+      "speaker": "bot",
+      "text": "میں اس سوال کے جواب کی تربیت یافتہ نہیں ہوں، اس لیے میں غلط مشورہ نہیں دوں گا۔ بنیادی ہدایت یہ ہے: مریض کو پرسکون رکھیں، جاری ابتدائی اقدامات پر عمل کریں، اور طبی مدد کے پہنچنے کا انتظار کریں۔",
+      "tts_cached": true
+    },
+    {
+      "timestamp": "2026-08-30T08:37:15.171925+00:00",
+      "speaker": "responder",
+      "text": "مریض بے ہوش ہو رہا ہے اور سانس میں تکلیف ہے"
+    },
+    {
+      "timestamp": "2026-08-30T08:37:19.380848+00:00",
+      "speaker": "bot",
+      "text": "الرٹ: صورتحال سنگین ہو رہی ہے۔ میں نے اسی وقت مزید طبی مدد اور ایمبولینس کی درخواست بھیج دی ہے۔",
+      "tts_cached": true
+    },
+    {
+      "timestamp": "2026-08-30T08:37:27.982965+00:00",
+      "speaker": "bot",
+      "text": "مریض کو بالکل نہ ہلائیں۔ اگر ہڈی باہر نکلی ہو تو اسے اندر دھکیلنے کی غلطی ہرگز نہ کریں، بس صاف کپڑے سے ڈھانپ دیں۔",
+      "tts_cached": true
+    },
+    {
+      "timestamp": "2026-08-30T08:37:39.352830+00:00",
+      "speaker": "bot",
+      "text": "معذرت، میں ٹھیک سے سن نہیں پایا۔ پریشان نہ ہوں۔ جو ہدایت دی گئی ہے اسی پر عمل جاری رکھیں، مدد راستے میں ہے۔ میں دوبارہ سننے کی کوشش کر رہا ہوں۔",
+      "tts_error": "429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and ",
+      "intended_line": "اگر مریض بے ہوش ہو رہا ہے تو اسے سیدھا لیٹائیں، سانس چیک کریں، اور مجھے آگاہ رکھیں۔"
+    }
+  ],
+  "expectations": [
+    {
+      "transcript": "مریض کو لٹا دیا ہے اور ٹانگ بالکل نہیں ہلا رہا",
+      "expected": "step_done",
+      "actual": "step_done",
+      "match": true
+    },
+    {
+      "transcript": "یہاں کوئی تختہ یا سخت چیز نہیں مل رہی، کیا کروں؟",
+      "expected": "in_scope_question",
+      "actual": "in_scope_question",
+      "match": true
+    },
+    {
+      "transcript": "مریض کو پانی یا درد کی گولی دے سکتے ہیں؟",
+      "expected": "in_scope_question",
+      "actual": "in_scope_question",
+      "match": true
+    },
+    {
+      "transcript": "اگر کسی کو سانپ کاٹ لے تو کیا کٹنے کے اوپر پٹی باندھنی چاہیے؟",
+      "expected": "out_of_scope",
+      "actual": "out_of_scope",
+      "match": true
+    },
+    {
+      "transcript": "مریض بے ہوش ہو رہا ہے اور سانس میں تکلیف ہے",
+      "expected": "escalation",
+      "actual": "escalation",
+      "match": true
+    }
+  ],
+  "expectation_summary": "5/5 matched",
+  "latencies": [
+    {
+      "transcript": "مریض کو لٹا دیا ہے اور ٹانگ بالکل نہیں ہلا رہا",
+      "intent": "step_done",
+      "detect_ms": 4970,
+      "respond_ms": 4971,
+      "turn_wall_ms": 17520
+    },
+    {
+      "transcript": "یہاں کوئی تختہ یا سخت چیز نہیں مل رہی، کیا کروں؟",
+      "intent": "in_scope_question",
+      "detect_ms": 4217,
+      "respond_ms": 4218,
+      "turn_wall_ms": 14815
+    },
+    {
+      "transcript": "مریض کو پانی یا درد کی گولی دے سکتے ہیں؟",
+      "intent": "in_scope_question",
+      "detect_ms": 4450,
+      "respond_ms": 4451,
+      "turn_wall_ms": 14411
+    },
+    {
+      "transcript": "اگر کسی کو سانپ کاٹ لے تو کیا کٹنے کے اوپر پٹی باندھنی چاہیے؟",
+      "intent": "out_of_scope",
+      "detect_ms": 4110,
+      "respond_ms": 4111,
+      "turn_wall_ms": 18776
+    },
+    {
+      "transcript": "مریض بے ہوش ہو رہا ہے اور سانس میں تکلیف ہے",
+      "intent": "escalation",
+      "detect_ms": 4208,
+      "respond_ms": 4209,
+      "turn_wall_ms": 35727
+    }
+  ],
+  "latency_summary_ms": {
+    "min": 4111,
+    "max": 4971,
+    "avg": 4392
+  },
+  "help_bot_transitions": [
+    {
+      "timestamp": "2026-08-30T08:35:43.836285+00:00",
+      "branch": "fracture_crush",
+      "from_state": "created",
+      "to_state": "initial_guidance",
+      "trigger_type": "branch_entered",
+      "detail": "branch=fracture_crush; matched=True; flags=['heavy_bleeding', 'major_trauma', 'deep_open_wound']"
+    },
+    {
+      "timestamp": "2026-08-30T08:35:59.737020+00:00",
+      "branch": "fracture_crush",
+      "from_state": "initial_guidance",
+      "to_state": "ongoing_monitor",
+      "trigger_type": "step_started",
+      "detail": "step 1/3: immobilize"
+    },
+    {
+      "timestamp": "2026-08-30T08:36:14.617925+00:00",
+      "branch": "fracture_crush",
+      "from_state": "ongoing_monitor",
+      "to_state": "ongoing_monitor",
+      "trigger_type": "step_started",
+      "detail": "step 2/3: cover_wound"
+    },
+    {
+      "timestamp": "2026-08-30T08:36:31.385594+00:00",
+      "branch": "fracture_crush",
+      "from_state": "ongoing_monitor",
+      "to_state": "ongoing_monitor",
+      "trigger_type": "in_scope_question",
+      "detail": "qa_entry=no_splint"
+    },
+    {
+      "timestamp": "2026-08-30T08:36:46.434469+00:00",
+      "branch": "fracture_crush",
+      "from_state": "ongoing_monitor",
+      "to_state": "ongoing_monitor",
+      "trigger_type": "in_scope_question",
+      "detail": "qa_entry=food_water"
+    },
+    {
+      "timestamp": "2026-08-30T08:37:00.505982+00:00",
+      "branch": "fracture_crush",
+      "from_state": "ongoing_monitor",
+      "to_state": "ongoing_monitor",
+      "trigger_type": "out_of_scope_question",
+      "detail": "honest fallback; no improvisation"
+    },
+    {
+      "timestamp": "2026-08-30T08:37:19.380527+00:00",
+      "branch": "fracture_crush",
+      "from_state": "ongoing_monitor",
+      "to_state": "escalated_monitor",
+      "trigger_type": "escalation_triggered",
+      "detail": "signal=unconsciousness_breathing_difficulty; suggested_tier=critical"
+    },
+    {
+      "timestamp": "2026-08-30T08:37:50.899324+00:00",
+      "branch": null,
+      "from_state": "escalation_hook",
+      "to_state": "escalated",
+      "trigger_type": "escalateIncident",
+      "detail": {
+        "trigger": "unconsciousness_breathing_difficulty",
+        "old_tier": "moderate",
+        "new_tier": "critical",
+        "transcript_excerpt": "مریض بے ہوش ہو رہا ہے اور سانس میں تکلیف ہے",
+        "new_flags": [
+          "unconsciousness_breathing_difficulty"
+        ]
+      }
+    },
+    {
+      "timestamp": "2026-08-30T08:37:50.899944+00:00",
+      "branch": "fracture_crush",
+      "from_state": "escalated_monitor",
+      "to_state": "escalated_monitor",
+      "trigger_type": "session_finalized",
+      "detail": "run_kind=replay"
+    }
+  ],
+  "final_incident": {
+    "incident_id": "INC-SIM-FRACTURE-CRUSH",
+    "timestamp_reported": "2026-08-30T08:35:43.835191+00:00",
+    "reporter_id": "REP-SIM",
+    "gps_location": {
+      "latitude": 31.5204,
+      "longitude": 74.3587,
+      "village_id": "VILLAGE-A"
+    },
+    "photo_ref": "simulated",
+    "voice_transcript": "(simulated incident for Module 2 help-bot run)",
+    "severity_tier": "critical",
+    "injury_type_flags": [
+      "heavy_bleeding",
+      "major_trauma",
+      "deep_open_wound",
+      "unconsciousness_breathing_difficulty"
+    ],
+    "responder_assigned_id": "RESP-02",
+    "responder_dispatch_timestamp": "2026-08-30T08:35:43.835279+00:00",
+    "bhu_notified": true,
+    "bhu_notify_timestamp": "2026-08-30T08:35:43.835279+00:00",
+    "ambulance_requested": true,
+    "outcome": null,
+    "help_bot_transitions": [
+      {
+        "timestamp": "2026-08-30T08:35:43.836285+00:00",
+        "branch": "fracture_crush",
+        "from_state": "created",
+        "to_state": "initial_guidance",
+        "trigger_type": "branch_entered",
+        "detail": "branch=fracture_crush; matched=True; flags=['heavy_bleeding', 'major_trauma', 'deep_open_wound']"
+      },
+      {
+        "timestamp": "2026-08-30T08:35:59.737020+00:00",
+        "branch": "fracture_crush",
+        "from_state": "initial_guidance",
+        "to_state": "ongoing_monitor",
+        "trigger_type": "step_started",
+        "detail": "step 1/3: immobilize"
+      },
+      {
+        "timestamp": "2026-08-30T08:36:14.617925+00:00",
+        "branch": "fracture_crush",
+        "from_state": "ongoing_monitor",
+        "to_state": "ongoing_monitor",
+        "trigger_type": "step_started",
+        "detail": "step 2/3: cover_wound"
+      },
+      {
+        "timestamp": "2026-08-30T08:36:31.385594+00:00",
+        "branch": "fracture_crush",
+        "from_state": "ongoing_monitor",
+        "to_state": "ongoing_monitor",
+        "trigger_type": "in_scope_question",
+        "detail": "qa_entry=no_splint"
+      },
+      {
+        "timestamp": "2026-08-30T08:36:46.434469+00:00",
+        "branch": "fracture_crush",
+        "from_state": "ongoing_monitor",
+        "to_state": "ongoing_monitor",
+        "trigger_type": "in_scope_question",
+        "detail": "qa_entry=food_water"
+      },
+      {
+        "timestamp": "2026-08-30T08:37:00.505982+00:00",
+        "branch": "fracture_crush",
+        "from_state": "ongoing_monitor",
+        "to_state": "ongoing_monitor",
+        "trigger_type": "out_of_scope_question",
+        "detail": "honest fallback; no improvisation"
+      },
+      {
+        "timestamp": "2026-08-30T08:37:19.380527+00:00",
+        "branch": "fracture_crush",
+        "from_state": "ongoing_monitor",
+        "to_state": "escalated_monitor",
+        "trigger_type": "escalation_triggered",
+        "detail": "signal=unconsciousness_breathing_difficulty; suggested_tier=critical"
+      },
+      {
+        "timestamp": "2026-08-30T08:37:50.899324+00:00",
+        "branch": null,
+        "from_state": "escalation_hook",
+        "to_state": "escalated",
+        "trigger_type": "escalateIncident",
+        "detail": {
+          "trigger": "unconsciousness_breathing_difficulty",
+          "old_tier": "moderate",
+          "new_tier": "critical",
+          "transcript_excerpt": "مریض بے ہوش ہو رہا ہے اور سانس میں تکلیف ہے",
+          "new_flags": [
+            "unconsciousness_breathing_difficulty"
+          ]
+        }
+      },
+      {
+        "timestamp": "2026-08-30T08:37:50.899944+00:00",
+        "branch": "fracture_crush",
+        "from_state": "escalated_monitor",
+        "to_state": "escalated_monitor",
+        "trigger_type": "session_finalized",
+        "detail": "run_kind=replay"
+      }
+    ]
+  }
+}

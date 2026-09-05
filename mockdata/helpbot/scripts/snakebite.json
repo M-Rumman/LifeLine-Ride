@@ -1,0 +1,10 @@
+{
+  "title": "Branch snakebite: initial guidance -> 2 step advances -> in-scope Q (tie cloth above bite - must say NO) -> out-of-scope Q (fever medicine) -> escalation (breathing difficulty)",
+  "turns": [
+    {"kind": "text", "urdu": "مریض کو لٹا دیا ہے، کٹا ہوا ہاتھ بالکل حرکت نہیں دے رہا", "expect": "step_done"},
+    {"kind": "text", "urdu": "کڑا اور گھڑی اتار دی ہے", "expect": "step_done"},
+    {"kind": "text", "urdu": "کیا میں کٹنے کے اوپر کپڑا یا پٹی کس کر باندھ دوں؟", "expect": "in_scope_question"},
+    {"kind": "text", "urdu": "کیا مریض کو بخار کی گولی دے دوں؟", "expect": "out_of_scope"},
+    {"kind": "text", "urdu": "مریض کو سانس لینے میں بہت تکلیف ہو رہی ہے", "expect": "escalation"}
+  ]
+}

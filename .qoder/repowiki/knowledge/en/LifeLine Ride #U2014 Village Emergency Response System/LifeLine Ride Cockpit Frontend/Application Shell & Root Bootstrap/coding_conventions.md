@@ -1,0 +1,5 @@
+- Global UI primitives are defined as Tailwind-based CSS classes (e.g. `.card`, `.card-panel`, `.pill`, `.pill-*`, `.field`, `.tag`) in `index.css` and reused throughout components instead of inline style fragments.
+- Role-dependent behavior is driven by a string-literal `role` value from `CockpitContext`, with a `switch(role)` dispatch selecting the active view rather than conditional rendering of all three.
+- Shared cross-role state (incident, triage result, help-bot transcript, timeline, toasts) lives exclusively in `CockpitContext`; individual views remain stateless consumers accessed via `useCockpit()`.
+- Visual variants are expressed as lookup tables keyed by enum-like strings (e.g. `ROLE_HINT[role]`, `TOAST_TONE[tone]`, `TOAST_DOT[tone]`) instead of branching logic inside JSX.
+- Leaflet styling is centralized in `index.css` with explicit overrides for container, tiles, controls, popups, and marker classes, keeping map appearance decoupled from React components.

@@ -1,0 +1,23 @@
+{
+  "heavy_bleeding": {
+    "source_line": "میں لائف لائن ہیلپ بوٹ ہوں۔ میں قدم بہ قدم آپ کی مدد کروں گا۔ سب سے پہلے گہرا سانس لیں اور پرسکون رہیں۔",
+    "note": null,
+    "wav": "D:\\LifeLine Ride\\mockdata\\helpbot\\tts_cache\\fd072e0dbf3bbee0.wav",
+    "roundtrip_transcript": "میں لائف لائن ہیلپ پورٹ ہوں۔ میں قدم بہ قدم آپ کی مدد کروں گا۔ سب سے پہلے گہرا سانس لیں اور پرسکون رہیں۔",
+    "stt_usable": true
+  },
+  "fracture_crush": {
+    "source_line": "میں لائف لائن ہیلپ بوٹ ہوں۔ یہ ہڈی کی چوٹ کا کیس ہے۔ مریض کو ہرگز ہلنے یا چلنے نہ دیں۔",
+    "note": null,
+    "wav": "D:\\LifeLine Ride\\mockdata\\helpbot\\tts_cache\\8d7fc33698f74ea9.wav",
+    "roundtrip_transcript": "میں لائف لائن ہیلپ بوٹ ہوں۔ یہ ہڈی کی چوٹ کا کیس ہے۔ مریض کو ہرگز ہلنے یا چلنے نہ دیں۔",
+    "stt_usable": true
+  },
+  "snakebite": {
+    "source_line": "میں لائف لائن ہیلپ بوٹ ہوں۔ یہ سانپ کے کاٹنے کا کیس ہے۔ مریض کو پرسکون رکھیں اور بالکل ہلنے نہ دیں، حرکت سے زہر تیزی سے پھیلتا ہے۔",
+    "note": null,
+    "wav": "D:\\LifeLine Ride\\mockdata\\helpbot\\tts_cache\\c55a311d6b77032d.wav",
+    "roundtrip_transcript": "میں لائف لائن ہیلپ بوٹ ہوں۔ یہ سانپ کے کاٹنے کا کیس ہے۔ مریض کو پرسکون رکھیں اور بالکل ہلنے نہ دیں۔ حرکت سے زہر تیزی سے پھیلتا ہے۔",
+    "stt_usable": true
+  }
+}

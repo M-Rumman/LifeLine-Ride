@@ -1,0 +1,2 @@
+- Incident state is modeled as a single domain object shared between the backend's in-memory store, the frontend's React context, and the mockdata replay fixtures.
+- Urdu-first user interactions are implemented via voice + photo triage flows backed by the same DashScope speech-to-text and vision models referenced in PROJECT.md.

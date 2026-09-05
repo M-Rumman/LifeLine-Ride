@@ -1,0 +1,10 @@
+{
+  "title": "Branch heavy_bleeding: initial guidance -> 2 step advances -> in-scope Q (soaked cloth) -> out-of-scope Q (water) -> escalation (bleeding worse + losing consciousness)",
+  "turns": [
+    {"kind": "text", "urdu": "ٹھیک ہے، زخم پر کپڑا رکھ کر دباؤ ڈال دیا ہے", "expect": "step_done"},
+    {"kind": "text", "urdu": "ہاتھ اوپر اٹھا دیا ہے، اگلا قدم بتائیں", "expect": "step_done"},
+    {"kind": "text", "urdu": "کپڑا خون سے بالکل بھیگ گیا ہے، کیا میں اسے اتار کر نیا کپڑا لگا دوں؟", "expect": "in_scope_question"},
+    {"kind": "text", "urdu": "مریض کہہ رہا ہے اسے شدید پیاس لگی ہے، کیا میں اسے پانی پلا دوں؟", "expect": "out_of_scope"},
+    {"kind": "text", "urdu": "خون نہیں رک رہا اور مریض بے ہوش ہو رہا ہے", "expect": "escalation"}
+  ]
+}

@@ -1,0 +1,5 @@
+- Each help-bot scenario script defines a `title` summarizing the intended flow and a `turns` array where every turn specifies `kind`, the Urdu `urdu` transcript, and an `expect` intent label (`step_done`, `in_scope_question`, `out_of_scope`, `escalation`).
+- Replay artifacts follow a fixed schema with top-level keys `run_kind`, `script_title`, `incident_id`, `branch_id`, `provider`, timestamps, `turns`, `expectations`, `latencies`, `help_bot_transitions`, and `final_incident`; new replays preserve this structure.
+- TTS cache entries are keyed by the SHA1 hash of the rendered audio filename and record the originating TTS model, voice, render timestamp, and source text so outputs remain reproducible.
+- Voice assets pair a `.txt` transcript with an `.mp3` audio file under `media/voice/`, one pair per simulated emergency scenario (e.g. snakebite, taang, ungli).
+- State transitions use a uniform `{timestamp, branch, from_state, to_state, trigger_type, detail}` shape, with `trigger_type` values such as `branch_entered`, `step_started`, `in_scope_question`, `out_of_scope_question`, `escalation_triggered`, and `session_finalized`.

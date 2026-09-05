@@ -1,0 +1,94 @@
+{
+  "exported_at": "2026-09-04T13:59:55.274825+00:00",
+  "incident_count": 1,
+  "records": [
+    {
+      "incident": {
+        "incident_id": "INC-P6-F8F98C",
+        "timestamp_reported": "2026-09-04T13:59:53.229392+00:00",
+        "reporter_id": "REP-TEST",
+        "gps_location": {
+          "latitude": 31.5204,
+          "longitude": 74.3587,
+          "village_id": "VILLAGE-A"
+        },
+        "photo_ref": "test_photo.jpg",
+        "voice_transcript": "test transcript",
+        "severity_tier": "moderate",
+        "injury_type_flags": [
+          "test_flag"
+        ],
+        "responder_assigned_id": "RESP-02",
+        "responder_dispatch_timestamp": "2026-09-04T13:59:53.229529+00:00",
+        "bhu_notified": true,
+        "bhu_notify_timestamp": "2026-09-04T13:59:53.229529+00:00",
+        "ambulance_requested": false,
+        "outcome": "taken_to_bhu",
+        "outcome_confirmed_by": "bhu_staff",
+        "incident_closed_timestamp": "2026-09-04T13:59:53.909975+00:00",
+        "help_bot_transitions": [],
+        "dispatch_events": [
+          {
+            "event": "responder_dispatched",
+            "responder_id": "RESP-02",
+            "responder_name": "Farhan Ali",
+            "tier": "moderate",
+            "timestamp": "2026-09-04T13:59:53.229575+00:00"
+          },
+          {
+            "event": "bhu_notified",
+            "bhu_id": "BHU-001",
+            "bhu_name": "Chak 45 Basic Health Unit",
+            "urgency": "standby",
+            "tier": "moderate",
+            "timestamp": "2026-09-04T13:59:53.909462+00:00"
+          },
+          {
+            "event": "incident_closed",
+            "timestamp": "2026-09-04T13:59:53.909975+00:00",
+            "outcome": "taken_to_bhu",
+            "confirmed_by": "bhu_staff",
+            "responder_released": "RESP-02"
+          }
+        ],
+        "dispatch_fallback_count": 0,
+        "coverage_gap": false,
+        "mid_incident_escalated": false,
+        "responder_arrived_timestamp": null,
+        "reporter_updates": [
+          {
+            "update_id": "UPD-DAD6FB",
+            "timestamp": "2026-09-04T13:59:53.229529+00:00",
+            "stage": "reported",
+            "message_urdu": "آپ کی ایمرجنسی کی اطلاع موصول ہو چکی ہے۔ سسٹم قریبی رضاکار تلاش کر رہا ہے۔",
+            "severity_tier": "moderate"
+          },
+          {
+            "update_id": "UPD-476573",
+            "timestamp": "2026-09-04T13:59:53.229529+00:00",
+            "stage": "responder_notified",
+            "message_urdu": "مددگار Farhan Ali کو اطلاع دے دی گئی ہے۔",
+            "severity_tier": "moderate"
+          },
+          {
+            "update_id": "UPD-478385",
+            "timestamp": "2026-09-04T13:59:53.229529+00:00",
+            "stage": "bhu_notified",
+            "message_urdu": "قریبی بنیادی مرکزِ صحت (BHU) کو الرٹ کر دیا گیا ہے۔",
+            "severity_tier": "moderate"
+          },
+          {
+            "update_id": "UPD-880D14",
+            "timestamp": "2026-09-04T13:59:53.909975+00:00",
+            "stage": "closed",
+            "message_urdu": "مریض کو بحفاظت بنیادی مرکزِ صحت منتقل کر دیا گیا ہے۔ ایمرجنسی مکمل ہو چکی ہے۔",
+            "severity_tier": "moderate"
+          }
+        ]
+      },
+      "dispatch_status": "dispatched",
+      "logged_at": "2026-09-04T13:59:53.909899+00:00",
+      "closed_at": "2026-09-04T13:59:54.593168+00:00"
+    }
+  ]
+}

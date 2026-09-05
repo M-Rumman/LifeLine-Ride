@@ -1,0 +1,42 @@
+{
+  "severity_tier": "critical",
+  "injury_type_flags": [
+    "venomous_snake_bite",
+    "puncture_wounds"
+  ],
+  "voice_transcript": "میرے بیٹے کو سانپ نے کاٹ لیا ہے مجھے سمجھ نہیں آ رہی میں کیا کروں اس کو بہت زیادہ درد ہو رہا ہے اور مجھے لگتا ہے زہر بھی، سانپ زہر والا تھا۔",
+  "triage_signals": [
+    {
+      "source": "stt",
+      "provider": "gemini",
+      "status": "ok",
+      "detail": "Urdu transcription of venomous snakebite report"
+    },
+    {
+      "source": "vision",
+      "provider": "gemini",
+      "status": "ok",
+      "detail": {
+        "injury_classification": "unclear",
+        "apparent_severity": "minor",
+        "confidence": 0.9,
+        "visible_signals": [
+          "Two small, distinct puncture marks containing tiny red droplets",
+          "Localized circular area of skin redness (erythema)",
+          "Mild localized swelling around the puncture marks"
+        ],
+        "image_usable": true
+      }
+    },
+    {
+      "source": "classifier",
+      "provider": "gemini",
+      "status": "ok",
+      "detail": [
+        "Transcript reports a bite from a snake believed to be venomous",
+        "Vision confirms two distinct puncture marks",
+        "Safety rule: voice-reported venomous bites never downgraded by minor vision findings"
+      ]
+    }
+  ]
+}

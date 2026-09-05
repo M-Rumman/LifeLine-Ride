@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: mockdata
+title: Help-Bot Scenario Fixtures & Replay Artifacts
+scope:
+    - mockdata/
+source_files: []
+depends_on: []
+related_to:
+    - path: backend

@@ -1,0 +1,5 @@
+- Shared mutable demo state (incident, triage, timeline, toasts) lives only in `CockpitContext`; views consume it via `useCockpit` and never hold local copies.
+- Role-specific screens are implemented as separate files under `views/` and selected by a `switch(role)` in the shell rather than via routing.
+- Cross-cutting utilities are grouped under `lib/` (`api`, `types`, `scenarios`, `geography`, `urdu`) and imported directly by views and components instead of being colocated.
+- UI fragments are extracted as small React components under `components/` (Header, SituationMap, TimelineFeed, ui primitives) and composed in views.
+- Styling uses Tailwind utility classes consistently; custom theme tokens (colors, shadows, radii) are applied via Tailwind config rather than inline styles.

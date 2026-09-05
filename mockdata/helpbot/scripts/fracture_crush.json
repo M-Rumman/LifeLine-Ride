@@ -1,0 +1,10 @@
+{
+  "title": "Branch fracture_crush: initial guidance -> step advance -> in-scope Q (no splint) -> in-scope Q (water/painkiller) -> out-of-scope Q (snakebite practice) -> escalation (unconscious + breathing)",
+  "turns": [
+    {"kind": "text", "urdu": "مریض کو لٹا دیا ہے اور ٹانگ بالکل نہیں ہلا رہا", "expect": "step_done"},
+    {"kind": "text", "urdu": "یہاں کوئی تختہ یا سخت چیز نہیں مل رہی، کیا کروں؟", "expect": "in_scope_question"},
+    {"kind": "text", "urdu": "مریض کو پانی یا درد کی گولی دے سکتے ہیں؟", "expect": "in_scope_question"},
+    {"kind": "text", "urdu": "اگر کسی کو سانپ کاٹ لے تو کیا کٹنے کے اوپر پٹی باندھنی چاہیے؟", "expect": "out_of_scope"},
+    {"kind": "text", "urdu": "مریض بے ہوش ہو رہا ہے اور سانس میں تکلیف ہے", "expect": "escalation"}
+  ]
+}

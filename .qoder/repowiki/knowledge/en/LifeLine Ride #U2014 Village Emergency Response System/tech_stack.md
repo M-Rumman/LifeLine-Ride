@@ -1,0 +1,1 @@
+Alibaba Cloud DashScope models (qwen-vl-max, qwen-plus, qwen-turbo), PostgreSQL/PolarDB with spatial lookup, OSS for temporary media, FastAPI + React/Vite stack across children.

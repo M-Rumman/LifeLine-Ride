@@ -1,0 +1,1 @@
+End-to-end rural emergency triage platform that wires a FastAPI backend, React cockpit, and Urdu help-bot scenario fixtures into a single incident-response workflow.

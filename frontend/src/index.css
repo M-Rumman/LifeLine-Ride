@@ -1,0 +1,295 @@
+@import 'leaflet/dist/leaflet.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==========================================================================
+   LifeLine Ride — Rozgaar-pattern dark base layer
+   Canvas is Deep Midnight Slate (#0a0f1d) edge-to-edge. Cards are Slate 900
+   (#111827) behind a slate-800 hairline. Rose and emerald are RESERVED for
+   critical emergencies and verified/resolved state respectively.
+   ========================================================================== */
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-canvas text-ink font-sans antialiased;
+    /* Depth without lifting the canvas off #0a0f1d: two very low-opacity
+       cyan washes, no grey and no black. */
+    background-image:
+      radial-gradient(
+        900px 520px at 12% -10%,
+        rgba(14, 165, 233, 0.1) 0%,
+        rgba(10, 15, 29, 0) 62%
+      ),
+      radial-gradient(
+        760px 460px at 96% 0%,
+        rgba(14, 165, 233, 0.06) 0%,
+        rgba(10, 15, 29, 0) 58%
+      );
+    background-attachment: fixed;
+  }
+
+  /* Urdu runs are RTL; the shell stays LTR so metrics and tables align.
+     Nastaliq needs a generous box or its descenders clip. */
+  [dir='rtl'] {
+    @apply font-urdu;
+    line-height: 2.2;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-semibold tracking-tight text-ink;
+  }
+
+  ::selection {
+    background: rgba(14, 165, 233, 0.32);
+    color: #f8fafc;
+  }
+
+  ::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0a0f1d;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #1e293b;
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #334155;
+  }
+
+  :focus-visible {
+    outline: 2px solid #0ea5e9;
+    outline-offset: 2px;
+  }
+}
+
+/* ==========================================================================
+   Components — pill geometry everywhere, containers on rounded-2xl
+   ========================================================================== */
+
+@layer components {
+  .card {
+    @apply bg-surface text-ink border border-slate-800/80 rounded-card shadow-card;
+  }
+
+  .card-panel {
+    @apply bg-surface text-ink border border-slate-800/80 rounded-panel shadow-panel;
+  }
+
+  /* Recessed well: inputs, feeds and the chat log sit BELOW the card surface. */
+  .well {
+    @apply bg-sunken border border-slate-800 rounded-2xl;
+  }
+
+  /* Every button, tag and tab is rounded-full per the design system. */
+  .pill {
+    @apply inline-flex items-center justify-center gap-2 rounded-full
+           font-medium transition-all duration-150 select-none
+           disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:translate-y-0;
+  }
+
+  .pill-primary {
+    @apply pill bg-accent text-white border border-accent
+           hover:bg-accent-bright hover:border-accent-bright hover:-translate-y-px
+           active:translate-y-0 shadow-sm;
+  }
+
+  .pill-cyan {
+    @apply pill bg-accent/10 text-sky-300 border border-accent/40
+           hover:bg-accent/20 hover:text-sky-200 hover:-translate-y-px active:translate-y-0;
+  }
+
+  .pill-mint {
+    @apply pill bg-verified/10 text-emerald-300 border border-verified/40
+           hover:bg-verified/20 hover:text-emerald-200 hover:-translate-y-px active:translate-y-0;
+  }
+
+  .pill-danger {
+    @apply pill bg-critical/10 text-rose-300 border border-critical/40
+           hover:bg-critical/20 hover:text-rose-200 hover:-translate-y-px active:translate-y-0;
+  }
+
+  .pill-ghost {
+    @apply pill bg-raised/60 text-slate-300 border border-slate-700
+           hover:text-white hover:border-slate-600 hover:bg-raised;
+  }
+
+  /* Solid high-impact call-to-action — the landing role buttons and the
+     reporter submit. Kept distinct from pill-primary so it can carry weight. */
+  .pill-solid-danger {
+    @apply pill bg-critical text-white border border-critical font-semibold
+           hover:bg-rose-600 hover:border-rose-600 hover:-translate-y-px
+           active:translate-y-0 shadow-rose;
+  }
+
+  .tag {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1
+           text-[11px] font-semibold tracking-wide uppercase border;
+  }
+
+  .field {
+    @apply w-full rounded-full bg-sunken border border-slate-800
+           px-4 py-2.5 text-sm text-ink placeholder:text-ink-dim
+           focus:border-accent focus:bg-[#0b1220] focus:outline-none transition-colors;
+  }
+
+  /* Native select arrow recoloured for the dark surface. */
+  .field-select {
+    @apply field appearance-none pr-9 cursor-pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%230ea5e9'%3E%3Cpath d='M5.5 7.5 10 12l4.5-4.5z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.6rem center;
+    background-size: 1.15rem;
+  }
+
+  .field-select option {
+    background-color: #111827;
+    color: #f8fafc;
+  }
+
+  .label {
+    @apply block text-[11px] font-semibold uppercase tracking-wider text-ink-muted mb-1.5;
+  }
+
+  .metric-value {
+    @apply text-2xl font-bold tracking-tighter text-sky-400 tabular-nums;
+  }
+}
+
+/* ==========================================================================
+   Utilities
+   ========================================================================== */
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Audio wave indicator beside the help-bot player. */
+  .wave-bar {
+    @apply w-[3px] rounded-full bg-accent origin-center;
+    animation: wave-bar 1s ease-in-out infinite;
+  }
+
+  .hairline-top {
+    border-top: 1px solid #1e293b;
+  }
+}
+
+/* ==========================================================================
+   Leaflet — reskinned onto the midnight slate canvas
+   ========================================================================== */
+
+.leaflet-container {
+  background: #0a0f1d;
+  font-family: inherit;
+  /* Full-bleed inside an `overflow-hidden` card — rounding the container as
+     well would leave a canvas notch at each corner. */
+  border-radius: 0;
+}
+
+/* Invert the OSM basemap rather than merely dimming it: brightness-only
+   leaves a mid-grey map that fights the near-black canvas. The hue-rotate
+   restores the land/water relationship and the low saturation keeps the
+   cyan/rose/emerald actor markers the brightest things on screen. */
+.leaflet-tile-pane {
+  filter: invert(1) hue-rotate(185deg) brightness(0.92) contrast(0.88) saturate(0.32);
+}
+
+.leaflet-control-attribution {
+  background: rgba(10, 15, 29, 0.88) !important;
+  color: #64748b !important;
+  font-size: 9px !important;
+  border-radius: 9999px 0 0 0;
+}
+.leaflet-control-attribution a {
+  color: #0ea5e9 !important;
+}
+
+.leaflet-bar a,
+.leaflet-bar a:hover {
+  background: #111827 !important;
+  color: #e2e8f0 !important;
+  border-bottom-color: #1e293b !important;
+}
+.leaflet-bar a:hover {
+  background: #1e293b !important;
+}
+
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: #111827 !important;
+  color: #f8fafc !important;
+  border: 1px solid #1e293b;
+  box-shadow: 0 14px 34px -14px rgba(2, 6, 23, 0.95) !important;
+}
+.leaflet-popup-content-wrapper {
+  border-radius: 14px !important;
+}
+.leaflet-popup-content {
+  margin: 10px 14px !important;
+  font-size: 12px !important;
+  line-height: 1.5 !important;
+}
+.leaflet-popup-close-button {
+  color: #64748b !important;
+}
+
+/* Marker halos — cyan for live actors, emerald for verified/complete,
+   rose for the incident itself. */
+.ll-marker {
+  border-radius: 9999px;
+  border: 2px solid rgba(248, 250, 252, 0.92);
+  box-shadow: 0 0 0 3px rgba(10, 15, 29, 0.6);
+}
+.ll-marker--reporter {
+  background: #ef4444;
+}
+.ll-marker--responder {
+  background: #0ea5e9;
+}
+.ll-marker--bhu {
+  background: #10b981;
+}
+.ll-marker--ambulance {
+  background: #f59e0b;
+}
+.ll-marker--idle {
+  background: #64748b;
+  opacity: 0.7;
+}
+
+/* Animated route vectors. Defined here rather than via a Tailwind animation
+   utility because Leaflet injects these <path> elements itself — the keyframes
+   must exist in the stylesheet unconditionally. */
+@keyframes ll-route-flow {
+  to {
+    stroke-dashoffset: -28;
+  }
+}
+
+.route-vector {
+  stroke-dasharray: 10 18;
+  animation: ll-route-flow 1s linear infinite;
+}
+
+.route-vector--static {
+  stroke-dasharray: 6 10;
+  opacity: 0.55;
+}

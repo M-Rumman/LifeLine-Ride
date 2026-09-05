@@ -1,0 +1,1 @@
+The DOM must contain an element with id `root` before bootstrapping; otherwise `main.tsx` throws a descriptive error. `StrictMode` is deliberately kept enabled at runtime to surface double-invocation bugs during development.

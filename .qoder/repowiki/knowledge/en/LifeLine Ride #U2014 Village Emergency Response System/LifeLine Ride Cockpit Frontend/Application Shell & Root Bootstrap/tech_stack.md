@@ -1,0 +1,1 @@
+React 18 with `createRoot` + `StrictMode`; Tailwind CSS via `@tailwind` directives; Leaflet maps reskinned through `leaflet/dist/leaflet.css` overrides; Urdu RTL support via `[dir='rtl']` rules.
