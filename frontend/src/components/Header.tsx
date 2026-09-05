@@ -50,18 +50,22 @@ export function Header() {
         <button
           type="button"
           onClick={() => (isLanding ? undefined : navigate(isOperations ? '/' : ROUTE_FOR_ROLE[role]))}
-          className="flex min-w-0 items-center gap-3 rounded-2xl text-left transition-opacity hover:opacity-90"
+          className="flex min-w-0 items-center gap-2.5 text-left transition-opacity hover:opacity-90 select-none"
           aria-label={isLanding ? 'LifeLine Ride' : 'Open role home'}
         >
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-accent/35 bg-accent/10">
-            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
-              <path d="M3 12h3.5l2-5 3.5 10 2.5-6 1.8 3H21" stroke="currentColor" className="text-sky-400" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-sky-600 to-emerald-500 shadow-md shadow-sky-950/40">
+            <svg viewBox="0 0 24 24" className="h-5 w-5 text-white" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
             </svg>
-          </span>
-          <span className="hidden min-w-0 leading-tight xs:block">
-            <span className="block truncate text-[16px] font-bold tracking-tight text-ink">LifeLine Ride</span>
-            <span dir="rtl" className="block truncate font-urdu text-[11px] leading-6 text-ink-muted">دیہی ایمرجنسی رسپانس نیٹ ورک</span>
-          </span>
+          </div>
+          <div className="flex flex-col min-w-0">
+            <span className="text-base font-extrabold tracking-wide leading-none text-slate-100">
+              LifeLine <span className="text-sky-400">Ride</span>
+            </span>
+            <span className="text-[10px] font-medium tracking-wider text-slate-400 uppercase leading-tight mt-1">
+              Rural Emergency Dispatch
+            </span>
+          </div>
         </button>
 
         {!isLanding && !isOperations && (

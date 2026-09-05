@@ -71,6 +71,7 @@ import {
   Tag,
   TierBadge,
 } from '../components/ui'
+import { BhuBackground } from '../components/BackgroundMotifs'
 
 function villageDisplay(id: string | null | undefined): string {
   return villageById(id)?.label_en ?? id ?? 'Local village'
@@ -102,6 +103,7 @@ export function BhuView() {
 
   return (
     <div className="flex flex-col gap-5">
+      <BhuBackground />
       {/* ================= Clinical Facility Status & Tabs ================= */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-surface px-5 py-3 text-xs">
         <div className="flex flex-wrap items-center gap-3">
@@ -118,7 +120,7 @@ export function BhuView() {
           </span>
           {isEnRoute && (
             <span className="rounded-full border border-sky-500/30 bg-sky-500/10 px-2.5 py-0.5 text-[11px] font-bold text-sky-300">
-              {lang === 'ur' ? 'رسپانڈر روانہ' : 'Responder En Route'}
+              {lang === 'ur' ? 'رسپانڈر کو اطلاع' : 'Responder En Route'}
             </span>
           )}
         </div>

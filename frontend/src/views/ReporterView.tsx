@@ -51,6 +51,7 @@ import { useSpeechToText } from '../hooks/useSpeechToText'
 import { TimelineFeed } from '../components/TimelineFeed'
 import { SituationMap } from '../components/SituationMap'
 import { EmptyState, Pill, Spinner, StatusDot, TierBadge } from '../components/ui'
+import { ReporterBackground } from '../components/BackgroundMotifs'
 
 function getIncidentPhotoUrl(ref: string | null | undefined): string | null {
   if (!ref) return null
@@ -556,6 +557,7 @@ export function ReporterView() {
   if (activeTab === 'history') {
     return (
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
+        <ReporterBackground />
         <EmergencyHistoryView
           lang={lang}
           onBack={() => setActiveTab('report')}
@@ -571,7 +573,9 @@ export function ReporterView() {
 
   if (tracked) {
     return (
-      <DistressStatusTracker
+      <>
+        <ReporterBackground />
+        <DistressStatusTracker
         report={tracked}
         lang={lang}
         hasVoiceInput={hasSubmittedVoice || Boolean(tracked.incident.voice_ref)}
@@ -585,6 +589,7 @@ export function ReporterView() {
         }}
         onViewHistory={() => setActiveTab('history')}
       />
+      </>
     )
   }
 
@@ -600,6 +605,7 @@ export function ReporterView() {
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-5">
+      <ReporterBackground />
       {/* ---------------- Top Readiness Bar ---------------- */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-surface px-5 py-3 text-xs">
         <div className="flex items-center gap-2">
@@ -1046,17 +1052,37 @@ export function ReporterView() {
               <div className="mt-3.5 border-t border-slate-800/80 pt-3">
                 {getTrivialInjuryType(triageAnalysis) ? (
                   <TrivialCareNote injuryType={getTrivialInjuryType(triageAnalysis)!} lang={lang} />
-                ) : (
+                ) : triageAnalysis.request_ambulance || triageAnalysis.clinical_category === 'CATEGORY_A' || triageAnalysis.severity_tier === 'critical' ? (
                   <>
                     <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5 mb-1.5">
                       <span>🛡️</span>
-                      <span>{lang === 'ur' ? 'آپ کی مدد راستے میں ہے (Help is on the way)' : 'Help is on the way'}</span>
+                      <span>{lang === 'ur' ? 'آپ کی مدد راستے میں ہے (Dual Dispatch: Responder + Ambulance)' : 'Help is on the way (Dual Dispatch)'}</span>
                     </p>
-                    <div className="rounded-xl border border-emerald-500/20 bg-emerald-950/20 p-3 text-xs text-emerald-100">
-                      <p dir={lang === 'ur' ? 'rtl' : 'ltr'} className={lang === 'ur' ? 'font-urdu text-[14px] leading-6' : 'leading-relaxed'}>
+                    <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/25 p-3 text-xs text-emerald-100 shadow-sm">
+                      <p dir={lang === 'ur' ? 'rtl' : 'ltr'} className={lang === 'ur' ? 'font-urdu text-[15px] leading-7 font-bold text-emerald-200' : 'leading-relaxed font-semibold'}>
                         {lang === 'ur'
-                          ? 'پرسکون رہیں اور مریض کو محفوظ جگہ پر لٹائیں۔ مددگار اور ایمبولینس کو آپ کی لوکیشن بھیج دی گئی ہے۔'
-                          : 'Stay calm and keep the patient in a safe place. Responder and ambulance have received your location.'}
+                          ? 'آپ کی مدد راستے میں ہے — قریبی مددگار اور ایمبولینس دونوں کو مطلع کر دیا گیا ہے'
+                          : 'Help is on the way — Both nearest responder and ambulance have been dispatched.'}
+                      </p>
+                      <p className="mt-1 text-[11px] text-emerald-300/80">
+                        {lang === 'ur' ? 'پرسکون رہیں اور مریض کو محفوظ جگہ پر رکھیں۔' : 'Stay calm and keep the patient in a safe, resting position.'}
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-sky-400 flex items-center gap-1.5 mb-1.5">
+                      <span>🛡️</span>
+                      <span>{lang === 'ur' ? 'قریبی رضاکار کو اطلاع (Single Dispatch: Local Responder)' : 'Local Responder Dispatched'}</span>
+                    </p>
+                    <div className="rounded-xl border border-sky-500/30 bg-sky-950/25 p-3 text-xs text-sky-100 shadow-sm">
+                      <p dir={lang === 'ur' ? 'rtl' : 'ltr'} className={lang === 'ur' ? 'font-urdu text-[15px] leading-7 font-bold text-sky-200' : 'leading-relaxed font-semibold'}>
+                        {lang === 'ur'
+                          ? 'قریبی رضاکار طبی مدد کے لیے راستے میں ہے'
+                          : 'Local Responder dispatched for on-scene first aid.'}
+                      </p>
+                      <p className="mt-1 text-[11px] text-sky-300/80">
+                        {lang === 'ur' ? 'رضاکار ابتدائی طبی امداد، پٹی اور بحالی کے لیے آ رہا ہے۔' : 'Volunteer is en route for on-scene stabilization, splinting, and dressing.'}
                       </p>
                     </div>
                   </>
@@ -1222,6 +1248,54 @@ function DistressStatusTracker({
     )
   }, [incident, record, timeline])
 
+  const isBackendResponderArrived = useMemo(() => {
+    const events = incident?.dispatch_events ?? record?.incident?.dispatch_events ?? []
+    const acknowledged = events.some((e: any) => {
+      const name = String(e?.event ?? e?.type ?? e?.stage ?? '').toLowerCase()
+      return name.includes('arrived')
+    })
+    const arrivedUpdate = (timeline?.updates ?? []).some(
+      (u) =>
+        u.stage === 'responder_arrived' ||
+        u.stage === 'arrived',
+    )
+    const status = String(timeline?.status ?? '').toLowerCase()
+    return (
+      acknowledged ||
+      arrivedUpdate ||
+      status === 'responder_arrived' ||
+      status === 'arrived' ||
+      status === 'closed' ||
+      Boolean(incident?.responder_arrived_timestamp)
+    )
+  }, [incident, record, timeline])
+
+  const [mapArrivals, setMapArrivals] = useState({
+    responderArrived: false,
+    ambulanceArrived: false,
+  })
+
+  const handleArrivalChange = useCallback(
+    (arrivals: { responderArrived: boolean; ambulanceArrived: boolean }) => {
+      setMapArrivals((prev) => {
+        if (
+          prev.responderArrived === arrivals.responderArrived &&
+          prev.ambulanceArrived === arrivals.ambulanceArrived
+        ) {
+          return prev
+        }
+        return arrivals
+      })
+    },
+    [],
+  )
+
+  const isResponderArrived = isBackendResponderArrived || mapArrivals.responderArrived
+  const isAmbulanceArrived =
+    Boolean(incident.ambulance_requested) &&
+    (String(timeline?.status ?? '').toLowerCase() === 'closed' || mapArrivals.ambulanceArrived)
+  const isBothArrived = Boolean(incident.ambulance_requested) && isResponderArrived && isAmbulanceArrived
+
   return (
     <div className="mx-auto flex w-full max-w-2xl animate-fade-rise flex-col gap-5">
       {/* ---------------- Headline verdict & Large Severity Badge ---------------- */}
@@ -1233,26 +1307,68 @@ function DistressStatusTracker({
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-slate-800/80 pb-5">
           <div className="min-w-0 flex-1">
             <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-ink">
-              {responderName && isAccepted ? (
-                lang === 'ur' ? (
-                  <span dir="rtl" className="font-urdu text-[24px] leading-10 text-emerald-400">
-                    مدد آ رہی ہے ✓
-                    <span className="mr-2 text-ink text-base font-sans font-medium">({responderName})</span>
-                  </span>
+              {incident.ambulance_requested ? (
+                isBothArrived ? (
+                  lang === 'ur' ? (
+                    <span dir="rtl" className="font-urdu text-[22px] leading-10 text-emerald-300">
+                      آپ کی مدد پہنچ چکی ہے — قریبی مددگار اور ایمبولینس دونوں پہنچ چکے ہیں
+                    </span>
+                  ) : (
+                    <span className="text-emerald-300">
+                      Help has arrived — Both nearest responder and ambulance have arrived
+                    </span>
+                  )
+                ) : isResponderArrived ? (
+                  lang === 'ur' ? (
+                    <span dir="rtl" className="font-urdu text-[22px] leading-10 text-emerald-300">
+                      قریبی مددگار پہنچ چکے ہیں — ایمبولینس راستے میں ہے
+                    </span>
+                  ) : (
+                    <span className="text-emerald-300">
+                      Nearest responder has arrived — Ambulance is en route
+                    </span>
+                  )
                 ) : (
-                  <span className="text-emerald-400">
-                    Help is on the way ✓
-                    <span className="ml-2 text-ink text-base font-normal">({responderName})</span>
-                  </span>
+                  lang === 'ur' ? (
+                    <span dir="rtl" className="font-urdu text-[22px] leading-10 text-rose-300">
+                      آپ کی مدد راستے میں ہے — قریبی مددگار اور ایمبولینس دونوں کو مطلع کر دیا گیا ہے
+                    </span>
+                  ) : (
+                    <span className="text-rose-300">
+                      Help is on the way — Both nearest responder and ambulance have been dispatched
+                    </span>
+                  )
+                )
+              ) : incident.responder_assigned_id || incident.dispatch_responder !== false ? (
+                isResponderArrived ? (
+                  lang === 'ur' ? (
+                    <span dir="rtl" className="font-urdu text-[22px] leading-10 text-emerald-300">
+                      قریبی رضاکار طبی مدد کے لیے پہنچ چکا ہے
+                    </span>
+                  ) : (
+                    <span className="text-emerald-300">
+                      Local Responder has arrived for on-scene first aid
+                    </span>
+                  )
+                ) : (
+                  lang === 'ur' ? (
+                    <span dir="rtl" className="font-urdu text-[22px] leading-10 text-emerald-400">
+                      قریبی رضاکار طبی مدد کے لیے راستے میں ہے
+                    </span>
+                  ) : (
+                    <span className="text-emerald-400">
+                      Local Responder dispatched for on-scene first aid
+                    </span>
+                  )
                 )
               ) : (
                 lang === 'ur' ? (
-                  <span dir="rtl" className="font-urdu text-[22px] leading-10 text-amber-400">
-                    مرکزِ صحت اور رضاکار کو الرٹ بھیج دیا گیا
+                  <span dir="rtl" className="font-urdu text-[22px] leading-10 text-slate-300">
+                    ایمرجنسی ڈسپیچ غیر فعال ہے — گھریلو دیکھ بھال کافی ہے
                   </span>
                 ) : (
-                  <span className="text-amber-400">
-                    Alert Sent to Health Center & Responder
+                  <span className="text-slate-300">
+                    Zero Dispatch — Self-Care Home Guidance
                   </span>
                 )
               )}
@@ -1310,12 +1426,16 @@ function DistressStatusTracker({
               <div className="min-w-0">
                 <p className="text-base font-bold tracking-tight text-ink">{responderName}</p>
                 <p className="text-xs text-sky-300 font-medium">
-                  {lang === 'ur' ? 'روانہ ہو چکا ہے' : 'En Route to Emergency Site'}
+                  {isResponderArrived
+                    ? (lang === 'ur' ? 'جائے وقوعہ پر پہنچ چکے ہیں' : 'Arrived at Emergency Site')
+                    : (lang === 'ur' ? 'مطلع کیا جا چکا ہے' : 'En Route to Emergency Site')}
                 </p>
               </div>
               <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/20 px-3 py-1 text-xs font-bold text-emerald-300">
-                <StatusDot tone="mint" pulse />
-                {lang === 'ur' ? 'فعال' : 'En Route'}
+                <StatusDot tone="mint" pulse={!isResponderArrived} />
+                {isResponderArrived
+                  ? (lang === 'ur' ? 'پہنچ گئے' : 'On Scene')
+                  : (lang === 'ur' ? 'فعال' : 'En Route')}
               </span>
             </div>
           </div>
@@ -1363,11 +1483,17 @@ function DistressStatusTracker({
             urgency={dispatch?.bhu_urgency ?? null}
           />
           <DispatchFact
-            on={incident.ambulance_requested}
+            on={Boolean(incident.ambulance_requested)}
             labelEn="Ambulance Transfer"
             labelUr="ایمبولینس"
-            detail={incident.ambulance_requested ? 'Dispatched (Urgent)' : 'Not Required'}
-            urgency={incident.ambulance_requested ? 'urgent' : null}
+            detail={
+              incident.ambulance_requested
+                ? isAmbulanceArrived
+                  ? (lang === 'ur' ? 'پہنچ چکی ہے (جائے وقوعہ)' : 'Arrived on Scene')
+                  : 'Dispatched (Urgent)'
+                : 'Not Required'
+            }
+            urgency={incident.ambulance_requested && !isAmbulanceArrived ? 'urgent' : null}
           />
         </div>
 
@@ -1458,11 +1584,16 @@ function DistressStatusTracker({
 
         {/* Layperson Bystander Reassurance Card */}
         <div className="mt-5">
-          <BystanderReassuranceCard lang={lang} />
+          <BystanderReassuranceCard
+            lang={lang}
+            ambulanceRequested={Boolean(incident.ambulance_requested)}
+            responderArrived={isResponderArrived}
+            ambulanceArrived={isAmbulanceArrived}
+          />
         </div>
 
         <div className="mt-5">
-          <SituationMap heightClass="h-[260px] sm:h-[320px]" />
+          <SituationMap heightClass="h-[260px] sm:h-[320px]" onArrivalChange={handleArrivalChange} />
         </div>
 
         <div className="mt-6 flex flex-wrap gap-3 border-t border-slate-800/80 pt-5">
@@ -1492,7 +1623,19 @@ function DistressStatusTracker({
   )
 }
 
-function BystanderReassuranceCard({ lang }: { lang: 'ur' | 'en' }) {
+function BystanderReassuranceCard({
+  lang,
+  ambulanceRequested = false,
+  responderArrived = false,
+  ambulanceArrived = false,
+}: {
+  lang: 'ur' | 'en'
+  ambulanceRequested?: boolean
+  responderArrived?: boolean
+  ambulanceArrived?: boolean
+}) {
+  const isBothArrived = ambulanceRequested && responderArrived && ambulanceArrived
+
   const bulletPoints = [
     {
       ur: 'پرسکون رہیں اور مریض کو محفوظ جگہ پر لٹائیں۔',
@@ -1502,30 +1645,84 @@ function BystanderReassuranceCard({ lang }: { lang: 'ur' | 'en' }) {
       ur: 'مریض کو اکیلا نہ چھوڑیں۔',
       en: 'Do not leave the patient alone.',
     },
-    {
-      ur: 'مددگار اور ایمبولینس کو آپ کی لوکیشن بھیج دی گئی ہے۔',
-      en: 'Responder and ambulance have received your location.',
-    },
+    ambulanceRequested
+      ? isBothArrived
+        ? {
+            ur: 'قریبی مددگار اور ایمبولینس دونوں پہنچ چکے ہیں — مکمل طبی امداد میسر ہے۔',
+            en: 'Both nearest responder and ambulance have arrived at your location.',
+          }
+        : responderArrived
+          ? {
+              ur: 'قریبی مددگار پہنچ چکے ہیں اور ایمبولینس بھی جلد پہنچ رہی ہے۔',
+              en: 'Nearest responder has arrived on scene, ambulance is arriving soon.',
+            }
+          : {
+              ur: 'آپ کی مدد راستے میں ہے — قریبی مددگار اور ایمبولینس دونوں کو مطلع کر دیا گیا ہے۔',
+              en: 'Help is on the way — Both nearest responder and ambulance have been dispatched to your location.',
+            }
+      : responderArrived
+        ? {
+            ur: 'قریبی رضاکار جائے وقوعہ پر پہنچ چکا ہے — ابتدائی طبی امداد جاری ہے۔',
+            en: 'Local volunteer responder has arrived — first aid is underway.',
+          }
+        : {
+            ur: 'قریبی رضاکار طبی مدد کے لیے راستے میں ہے۔',
+            en: 'Nearest volunteer responder is on the way for on-scene first aid.',
+          },
   ]
 
   return (
     <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/25 p-5 shadow-sm">
       <div className="flex items-center gap-3 border-b border-emerald-500/20 pb-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-xl text-emerald-300">
-          🛡️
+          {isBothArrived || (!ambulanceRequested && responderArrived) ? '✅' : '🛡️'}
         </span>
         <div>
           <h3 className="text-base font-bold text-emerald-200">
-            {lang === 'ur' ? (
-              <span dir="rtl" className="font-urdu text-[18px] leading-7">
-                آپ کی مدد راستے میں ہے (Help is on the way)
+            {ambulanceRequested ? (
+              isBothArrived ? (
+                <span dir="rtl" className="font-urdu text-[17px] leading-7">
+                  {lang === 'ur'
+                    ? 'آپ کی مدد پہنچ چکی ہے — قریبی مددگار اور ایمبولینس دونوں پہنچ چکے ہیں'
+                    : 'Help has arrived — Both responder and ambulance are on scene'}
+                </span>
+              ) : responderArrived ? (
+                <span dir="rtl" className="font-urdu text-[17px] leading-7">
+                  {lang === 'ur'
+                    ? 'قریبی مددگار پہنچ چکے ہیں — ایمبولینس راستے میں ہے'
+                    : 'Responder on Scene — Ambulance en route'}
+                </span>
+              ) : (
+                <span dir="rtl" className="font-urdu text-[17px] leading-7">
+                  {lang === 'ur'
+                    ? 'آپ کی مدد راستے میں ہے — قریبی مددگار اور ایمبولینس دونوں کو مطلع کر دیا گیا ہے'
+                    : 'Help is on the way — Dual Dispatch (Responder + Ambulance)'}
+                </span>
+              )
+            ) : responderArrived ? (
+              <span dir="rtl" className="font-urdu text-[17px] leading-7">
+                {lang === 'ur'
+                  ? 'قریبی رضاکار طبی مدد کے لیے پہنچ چکا ہے'
+                  : 'Local responder has arrived on scene'}
               </span>
             ) : (
-              'آپ کی مدد راستے میں ہے (Help is on the way)'
+              <span dir="rtl" className="font-urdu text-[17px] leading-7">
+                {lang === 'ur'
+                  ? 'قریبی رضاکار طبی مدد کے لیے راستے میں ہے'
+                  : 'Help is on the way — Single Dispatch (Local Responder)'}
+              </span>
             )}
           </h3>
           <p className="text-[11px] text-emerald-300/80">
-            {lang === 'ur' ? 'ایمرجنسی ٹیم کو اطلاع دی جا چکی ہے' : 'Emergency team dispatched to your location'}
+            {ambulanceRequested
+              ? isBothArrived
+                ? (lang === 'ur' ? 'قریبی رضاکار اور ایمبولینس دونوں جائے وقوعہ پر پہنچ چکے ہیں' : 'Both responder and ambulance have arrived at your location')
+                : responderArrived
+                  ? (lang === 'ur' ? 'رضاکار جائے وقوعہ پر پہنچ چکا ہے، ایمبولینس بھی جلد پہنچ جائے گی' : 'First responder has reached you, ambulance is arriving soon')
+                  : (lang === 'ur' ? 'قریبی رضاکار اور ایمبولینس کو الرٹ کر دیا گیا ہے' : 'Both responder and ambulance dispatched to your location')
+              : responderArrived
+                ? (lang === 'ur' ? 'رضاکار ابتدائی طبی امداد کے لیے جائے وقوعہ پر پہنچ چکا ہے' : 'Local volunteer responder has arrived at your location')
+                : (lang === 'ur' ? 'ابتدائی طبی امداد کے لیے رضاکار کو مطلع کر دیا گیا ہے' : 'Local volunteer responder dispatched for on-scene first aid')}
           </p>
         </div>
       </div>

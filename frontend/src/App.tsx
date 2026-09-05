@@ -45,9 +45,12 @@ function Shell() {
   const isGateway = !activeRole || route === '/'
 
   return (
-    <div className="flex min-h-screen flex-col bg-canvas font-sans" dir="ltr">
+    <div
+      className="relative flex min-h-screen flex-col bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-[#0a0f1d] to-[#040711] font-sans overflow-x-hidden"
+      dir="ltr"
+    >
       <Header />
-      <main className="w-full flex-1 px-4 py-5 sm:px-6 sm:py-7">
+      <main className="relative z-10 w-full flex-1 px-4 py-5 sm:px-6 sm:py-7">
         {route === '/operations' ? (
           <OperationsView />
         ) : isGateway ? (

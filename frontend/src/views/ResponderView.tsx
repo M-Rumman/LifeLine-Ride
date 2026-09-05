@@ -13,8 +13,8 @@
  *     role switch, so an unconditional `play()` on mount used to fire unrequested
  *     "ghost" audio every time the responder tab was opened. Playback is gated on
  *     `playNextBotTurnRef`, which is only set by an explicit user gesture.
- *  2. NO ghost messages. The log starts empty; the session is opened by the
- *     responder pressing Start Guidance, tapping a chip, or speaking.
+ *  2. NO ghost messages. The log starts empty; the session is opened only when
+ *     the responder types a message, taps an emergency chip, or speaks.
  *
  * Quick-reply chips send their label VERBATIM — a chip never says one thing and
  * post another.
@@ -45,10 +45,11 @@ import {
   Tag,
   TierBadge,
 } from '../components/ui'
+import { ResponderBackground } from '../components/BackgroundMotifs'
 
 
 /**
- * Quick-reply chips rendered above the help-bot input.
+ * Quick-reply chips rendered above the live assistant input.
  */
 const QUICK_REPLIES: {
   id: string
@@ -58,32 +59,27 @@ const QUICK_REPLIES: {
   tone: 'mint' | 'critical'
 }[] = [
   {
-    id: 'next-step',
-    label_ur: 'اگلا قدم بتائیں',
-    label_en: 'Next Step',
-    transcript: 'اگلا قدم بتائیں',
-    tone: 'mint',
-  },
-  {
     id: 'bleeding-not-stopping',
     label_ur: 'خون نہیں رک رہا',
-    label_en: 'Bleeding Not Stopping',
+    label_en: 'Bleeding not stopping',
     transcript: 'خون نہیں رک رہا',
     tone: 'critical',
   },
   {
-    id: 'unconscious',
-    label_ur: 'مریض بے ہوش ہے',
-    label_en: 'Patient Unconscious',
-    transcript: 'مریض بے ہوش ہے',
+    id: 'pulse-weakening',
+    label_ur: 'نبض مدہم ہو رہی ہے',
+    label_en: 'Pulse weakening',
+    transcript: 'نبض مدہم ہو رہی ہے',
+    tone: 'critical',
+  },
+  {
+    id: 'losing-consciousness',
+    label_ur: 'مریض بے ہوش ہو رہا ہے',
+    label_en: 'Patient losing consciousness',
+    transcript: 'مریض بے ہوش ہو رہا ہے',
     tone: 'critical',
   },
 ]
-
-/** Utterance that opens a session, sent only when the responder presses the
- *  explicit "Start Guidance" button. */
-const START_GUIDANCE_UR =
-  'سلام، میں جائے وقوعہ پر پہنچ گیا ہوں، پہلی طبی امداد کی رہنمائی فرمائیں'
 
 function matchesVillage(rVillage: string | undefined | null, targetVillage: string | undefined | null): boolean {
   if (!rVillage || !targetVillage) return false
@@ -125,6 +121,13 @@ export function ResponderView() {
   const [audioSrc, setAudioSrc] = useState<string | null>(null)
   const [audioPlaying, setAudioPlaying] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  /** Index of the bubble whose Urdu audio is currently speaking (server wav or
+   * the last-resort browser voice); null while silent. Drives سنیں/روکیں. */
+  const [listeningIndex, setListeningIndex] = useState<number | null>(null)
+  /** A user gesture asked to play the next committed `audioSrc`. Playback must
+   * start only AFTER React commits the new src onto the <audio> element — a
+   * play() in the same tick would start the PREVIOUS wav. */
+  const wantPlayRef = useRef(false)
   const logRef = useRef<HTMLDivElement | null>(null)
   /** True only between an explicit user send and the bot line answering it. */
   const playNextBotTurnRef = useRef(false)
@@ -266,15 +269,81 @@ export function ResponderView() {
   useEffect(() => {
     const last = botTurns[botTurns.length - 1]
     if (!last || last.speaker !== 'bot') return
+    // A new bot line supersedes whatever was being spoken.
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel()
+    setListeningIndex(null)
     const url = resolveMediaUrl(last.audioUrl)
-    setAudioSrc(url)
-    if (!url || !playNextBotTurnRef.current) return
+    const gated = playNextBotTurnRef.current
     playNextBotTurnRef.current = false
+    if (!url) {
+      setAudioSrc(url)
+      return
+    }
+    if (url === audioSrc) {
+      // Player already carries this wav — play now if a gesture asked for it.
+      if (gated) void audioRef.current?.play().catch(() => setAudioPlaying(false))
+      return
+    }
+    setAudioSrc(url)
+    wantPlayRef.current = gated
+  }, [botTurns, audioSrc])
+
+  /** Starts playback once React has committed the new src to the <audio>
+   *  element; playing in the same tick as setAudioSrc plays the old wav. */
+  useEffect(() => {
+    if (!wantPlayRef.current || !audioSrc) return
+    wantPlayRef.current = false
     void audioRef.current?.play().catch(() => {
       // Autoplay policy refused it — the native controls remain available.
       setAudioPlaying(false)
+      setListeningIndex(null)
     })
-  }, [botTurns])
+  }, [audioSrc])
+
+  /**
+   * سنیں button — plays the turn's SERVER-RENDERED Urdu wav through the shared
+   * player. The browser's own speechSynthesis is only a last-resort fallback
+   * for when the backend could not render audio: desktop machines ship no
+   * Urdu voice, so its default English voice reads embedded English words and
+   * vocalises markdown symbols ("asterisk asterisk") instead of the guidance.
+   */
+  function toggleListen(
+    index: number,
+    turn: { audioUrl?: string | null; text: string },
+  ) {
+    const url = resolveMediaUrl(turn.audioUrl)
+    if (url) {
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel()
+      if (listeningIndex === index && audioRef.current && !audioRef.current.paused) {
+        audioRef.current.pause() // onPause clears listeningIndex
+        return
+      }
+      setListeningIndex(index)
+      if (url === audioSrc) {
+        void audioRef.current?.play().catch(() => setListeningIndex(null))
+        return
+      }
+      wantPlayRef.current = true
+      setAudioSrc(url)
+      return
+    }
+    // No server audio (TTS outage): sanitised browser voice, never raw markdown.
+    if (!('speechSynthesis' in window)) return
+    if (listeningIndex === index) {
+      window.speechSynthesis.cancel()
+      setListeningIndex(null)
+      return
+    }
+    audioRef.current?.pause()
+    window.speechSynthesis.cancel()
+    const utterance = new SpeechSynthesisUtterance(speakableText(turn.text))
+    utterance.lang = 'ur-PK'
+    utterance.rate = 0.95
+    utterance.onend = () => setListeningIndex((cur) => (cur === index ? null : cur))
+    utterance.onerror = () => setListeningIndex((cur) => (cur === index ? null : cur))
+    setListeningIndex(index)
+    window.speechSynthesis.speak(utterance)
+  }
 
   async function handleRespond(action: 'accept' | 'decline') {
     setActing(action)
@@ -300,15 +369,6 @@ export function ResponderView() {
     setPendingTurn(null)
   }
 
-  /**
-   * Explicit, user-initiated session opener — replaces the removed
-   * auto-injected greeting. The transcript log stays clean and empty until the
-   * responder presses this, taps a quick reply, or speaks.
-   */
-  async function startGuidance() {
-    await handleTurn(START_GUIDANCE_UR)
-  }
-
   // -------------------------------------------------------------------------
   // Render — Role-isolated focused card layout
   // -------------------------------------------------------------------------
@@ -316,6 +376,7 @@ export function ResponderView() {
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-5">
+      <ResponderBackground />
       {/* ---------------- Top Duty Availability & Navigation Bar ---------------- */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-surface px-5 py-3 text-xs">
         <div className="flex flex-wrap items-center gap-3">
@@ -604,8 +665,8 @@ export function ResponderView() {
       ) : (
         /* ================= Screen 2: Step-by-step guidance interface ================= */
         <Card
-          title="Responder Guidance Console"
-          titleUr="فرسٹ رسپانڈر رہنمائی"
+          title="Live Emergency Assistant Chat"
+          titleUr="طبی اے آئی کوپائلٹ"
           right={
             <div className="flex items-center gap-2">
               <span
@@ -686,7 +747,7 @@ export function ResponderView() {
                   Spoken Guidance (Urdu Audio)
                 </p>
                 <p className="truncate font-mono text-[10px] text-ink-dim">
-                  {audioSrc ? 'Audio instructions ready' : 'Tap play or start guidance below'}
+                  {audioSrc ? 'Audio instructions ready' : 'Tap play, use speaker icons on bubbles, or ask below'}
                 </p>
               </div>
               <audio
@@ -696,9 +757,18 @@ export function ResponderView() {
                 preload="auto"
                 className="h-9 max-w-[280px] flex-1"
                 onPlay={() => setAudioPlaying(true)}
-                onPause={() => setAudioPlaying(false)}
-                onEnded={() => setAudioPlaying(false)}
-                onError={() => setAudioPlaying(false)}
+                onPause={() => {
+                  setAudioPlaying(false)
+                  setListeningIndex(null)
+                }}
+                onEnded={() => {
+                  setAudioPlaying(false)
+                  setListeningIndex(null)
+                }}
+                onError={() => {
+                  setAudioPlaying(false)
+                  setListeningIndex(null)
+                }}
               />
             </div>
 
@@ -708,30 +778,28 @@ export function ResponderView() {
               className="flex max-h-[420px] min-h-[220px] flex-col gap-3 overflow-y-auto rounded-2xl border border-slate-800 bg-sunken p-4"
             >
               {botTurns.length === 0 ? (
-                <div className="m-auto flex flex-col items-center gap-3 py-6 text-center">
+                <div className="m-auto flex flex-col items-center justify-center gap-2 py-8 text-center text-ink-muted">
+                  <div className="grid h-12 w-12 place-items-center rounded-2xl border border-slate-700/60 bg-slate-800/40 text-2xl mb-1 shadow-sm">
+                    🩺
+                  </div>
                   <p dir="rtl" className="font-urdu text-[16px] font-bold leading-8 text-slate-100">
-                    رہنمائی تیار ہے — بولیں، لکھیں یا نیچے دیے گئے بٹن میں سے کوئی منتخب کریں
+                    طبی اے آئی کوپائلٹ تیار ہے
                   </p>
-                  <Pill
-                    variant="primary"
-                    size="lg"
-                    loading={pendingTurn !== null}
-                    onClick={startGuidance}
-                    disabled={pendingTurn !== null || isClosed}
-                  >
-                    {pendingTurn === null && (
-                      <>
-                        <span dir="rtl" className="font-urdu text-[16px] leading-7">
-                          رہنمائی شروع کریں
-                        </span>
-                        <span className="opacity-80">(Start Guidance)</span>
-                      </>
-                    )}
-                  </Pill>
+                  <p dir="rtl" className="font-urdu text-[14px] leading-6 text-slate-300">
+                    رہنمائی حاصل کرنے کے لیے نیچے سوال لکھیں، مائیک سے بولیں، یا ایمرجنسی بٹن دبائیں۔
+                  </p>
+                  <p className="text-xs text-ink-dim">
+                    Type a question, speak (🎙️), or tap an emergency chip below to start the conversation.
+                  </p>
                 </div>
               ) : (
                 botTurns.map((t, i) => (
-                  <ChatBubble key={i} turn={t} />
+                  <ChatBubble
+                    key={i}
+                    turn={t}
+                    speaking={listeningIndex === i}
+                    onToggleSpeech={() => toggleListen(i, t)}
+                  />
                 ))
               )}
 
@@ -923,7 +991,41 @@ function ResponderRoster({
   )
 }
 
-function ChatBubble({ turn }: { turn: { speaker: 'responder' | 'bot'; text: string; at: number; intent?: string; escalated?: boolean } }) {
+/**
+ * Markdown-free, Urdu-only plain text for the last-resort browser voice.
+ * The backend already sanitises before TTS; this covers only the offline
+ * fallback so even that never vocalises "**" as "asterisk asterisk", never
+ * reads parenthetical English glosses, and pauses on Urdu punctuation.
+ */
+function speakableText(text: string): string {
+  return text
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/[*_`#]+/g, ' ')
+    .replace(/[\(\[][^)\]]*[A-Za-z][^)\]]*[\)\]]/g, ' ') // "(apply pressure)" glosses
+    .replace(/[A-Za-z]+/g, ' ')                          // any leftover English words
+    .replace(/:/g, '۔').replace(/;/g, '،').replace(/\//g, ' یا ')
+    .replace(/(^|\n)\s*\d+\.\s*/g, '$1')
+    .replace(/۔{2,}/g, '۔')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function ChatBubble({
+  turn,
+  speaking,
+  onToggleSpeech,
+}: {
+  turn: {
+    speaker: 'responder' | 'bot'
+    text: string
+    at: number
+    intent?: string
+    audioUrl?: string | null
+    escalated?: boolean
+  }
+  speaking: boolean
+  onToggleSpeech: () => void
+}) {
   const mine = turn.speaker === 'responder'
 
   return (
@@ -933,26 +1035,46 @@ function ChatBubble({ turn }: { turn: { speaker: 'responder' | 'bot'; text: stri
           mine
             ? 'rounded-br-sm border-sky-500/35 bg-sky-500/15'
             : turn.escalated
-              ? 'rounded-bl-sm border-rose-500/45 bg-rose-500/12'
+              ? 'rounded-bl-sm border-rose-500/45 bg-rose-500/12 shadow-rose'
               : 'rounded-bl-sm border-slate-700 bg-slate-800'
         }`}
       >
-        <p
-          className={`mb-1.5 text-[10px] font-bold uppercase tracking-wider ${
-            mine ? 'text-sky-300/80' : turn.escalated ? 'text-rose-300/80' : 'text-ink-dim'
-          }`}
-        >
-          {mine ? 'You (آپ)' : 'Clinical Bot (رہنما)'}
-          {turn.intent ? ` · ${turn.intent}` : ''}
-          {turn.escalated ? ' · ESCALATION' : ''}
-          <span
-            className={`ml-2 font-mono font-normal normal-case ${
-              mine ? 'text-sky-400/50' : 'text-ink-dim/70'
+        <div className="flex items-center justify-between gap-2 mb-1.5">
+          <p
+            className={`text-[10px] font-bold uppercase tracking-wider ${
+              mine ? 'text-sky-300/80' : turn.escalated ? 'text-rose-300/80' : 'text-ink-dim'
             }`}
           >
-            {formatClock(new Date(turn.at).toISOString())}
-          </span>
-        </p>
+            {mine ? 'You (آپ)' : 'Clinical Copilot (طبی اے آئی کوپائلٹ)'}
+            {turn.escalated ? ' · ESCALATION' : ''}
+            <span
+              className={`ml-2 font-mono font-normal normal-case ${
+                mine ? 'text-sky-400/50' : 'text-ink-dim/70'
+              }`}
+            >
+              {formatClock(new Date(turn.at).toISOString())}
+            </span>
+          </p>
+
+          {!mine && (
+            <button
+              type="button"
+              onClick={onToggleSpeech}
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors ${
+                speaking
+                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse'
+                  : 'bg-slate-700/80 text-sky-300 hover:bg-slate-700 border border-slate-600'
+              }`}
+              title={speaking ? 'Stop audio' : 'Listen hands-free in Urdu'}
+            >
+              <span>{speaking ? '⏹️' : '🔊'}</span>
+              <span dir="rtl" className="font-urdu text-[11px]">
+                {speaking ? 'روکیں' : 'سنیں'}
+              </span>
+            </button>
+          )}
+        </div>
+
         <p
           dir="rtl"
           className={`font-urdu text-[15px] leading-8 ${
@@ -1004,9 +1126,7 @@ function FreeTextInput({
 
   return (
     <div className="rounded-2xl border border-slate-700 bg-raised/50 p-3.5">
-      {/* One tap posts the turn to POST /api/v1/helpbot/step. The chip's label
-          and its payload are the same string, so what the responder reads is
-          exactly what the classifier receives. */}
+      {/* 3 Quick-Tap Emergency Situational Chips */}
       <div className="flex flex-wrap gap-2 pb-3">
         {QUICK_REPLIES.map((q) => (
           <button
@@ -1014,17 +1134,13 @@ function FreeTextInput({
             type="button"
             disabled={sending}
             onClick={() => send(q.transcript)}
-            className={`pill px-3.5 py-2 text-xs font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-45 ${
-              q.tone === 'critical'
-                ? 'border border-rose-500/40 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20'
-                : 'border border-emerald-500/40 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20'
-            }`}
+            className="pill px-3.5 py-2 text-xs font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-45 border border-rose-500/40 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 shadow-sm"
             title={`Sends: ${q.transcript}`}
           >
             <span dir="rtl" className="font-urdu text-[14px] leading-6">
               {q.label_ur}
             </span>
-            <span className="opacity-70">({q.label_en})</span>
+            <span className="opacity-75 font-normal ml-1">({q.label_en})</span>
           </button>
         ))}
       </div>
@@ -1063,9 +1179,9 @@ function FreeTextInput({
           dir="rtl"
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          placeholder="…یہاں اردو میں بولیں یا لکھیں"
-          className="field min-w-[180px] flex-1 font-urdu text-[15px] leading-7"
-          aria-label="Responder Urdu transcript"
+          placeholder="کوئی بھی سوال پوچھیں یا رہنمائی لیں... (Ask any question or get guidance...)"
+          className="field min-w-[200px] flex-1 font-urdu text-[15px] leading-7"
+          aria-label="Responder Urdu question input"
         />
 
         <Pill

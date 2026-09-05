@@ -113,7 +113,7 @@ export function LandingView() {
       <section className="mx-auto mt-10 max-w-4xl rounded-[22px] border border-slate-800 bg-surface/70 p-5 sm:p-6">
         <div className="grid gap-4 sm:grid-cols-3">
           <MiniStep no="1" titleEn="Report" titleUr="رپورٹ" bodyEn="Urdu voice, photo and location." bodyUr="اردو آواز، تصویر اور مقام۔" />
-          <MiniStep no="2" titleEn="Respond" titleUr="مدد" bodyEn="A verified responder is dispatched." bodyUr="تصدیق شدہ رسپانڈر روانہ ہوتا ہے۔" />
+          <MiniStep no="2" titleEn="Respond" titleUr="مدد" bodyEn="A verified responder is dispatched." bodyUr="تصدیق شدہ رسپانڈر کو اطلاع دی جاتی ہے۔" />
           <MiniStep no="3" titleEn="Receive care" titleUr="علاج" bodyEn="The linked health facility is prepared." bodyUr="منسلک مرکزِ صحت تیار رہتا ہے۔" />
         </div>
       </section>

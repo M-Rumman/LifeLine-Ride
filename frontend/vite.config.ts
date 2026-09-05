@@ -44,6 +44,7 @@ const TARGET = backendOrigin()
 const proxy = {
   '/api': { target: TARGET, changeOrigin: true },
   '/health': { target: TARGET, changeOrigin: true },
+  '/responder': { target: TARGET, changeOrigin: true },
   // Cached help-bot TTS wavs served by main.py's /media static mount.
   '/media': { target: TARGET, changeOrigin: true },
 }

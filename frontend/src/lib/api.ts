@@ -46,6 +46,8 @@ import type {
   ReportResponse,
   RespondResponse,
   Responder,
+  ResponderChatRequest,
+  ResponderChatResponse,
   RespondersListResponse,
   SeverityTier,
   TimelineResponse,
@@ -357,6 +359,16 @@ export function responderArrived(params: {
   responder_id: string
 }): Promise<ArrivedResponse> {
   return json<ArrivedResponse>(`${API_V1}/responder/arrived`, 'POST', params)
+}
+
+/**
+ * Conversational AI First-Aid Copilot for field responders.
+ * Posts question/situation to Gemini with dynamic incident context.
+ */
+export function responderChat(
+  params: ResponderChatRequest,
+): Promise<ResponderChatResponse> {
+  return json<ResponderChatResponse>(`${API_V1}/responder/chat`, 'POST', params)
 }
 
 // ---------------------------------------------------------------------------

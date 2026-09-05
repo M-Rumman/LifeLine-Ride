@@ -104,8 +104,10 @@ const responderAcceptTimestamps = new Map<string, number>()
 
 export function SituationMap({
   heightClass = 'h-[300px]',
+  onArrivalChange,
 }: {
   heightClass?: string
+  onArrivalChange?: (arrivals: { responderArrived: boolean; ambulanceArrived: boolean }) => void
 } = {}) {
   const { incident, responders, timeline, lastReport } = useCockpit()
 
@@ -164,7 +166,9 @@ export function SituationMap({
   }, [incident, timeline, status, isResponderArrived])
 
   const isAmbulanceRequested = Boolean(
-    incident?.ambulance_requested || incident?.bhu_notified,
+    incident?.ambulance_requested ||
+      (lastReport?.dispatch?.ambulance_requested === true &&
+        lastReport?.incident?.incident_id === incident?.incident_id),
   )
 
   // Track emergency start & responder accept timestamps in session map
@@ -364,14 +368,14 @@ export function SituationMap({
     }
 
     // 3. Static BHU Transfer Route Vector (Background)
-    if (reporterPos && bhuPos && (incident?.bhu_notified || incident?.ambulance_requested)) {
+    if (reporterPos && bhuPos && isAmbulanceRequested) {
       L.polyline(
         [
           [reporterPos.lat, reporterPos.lng],
           [bhuPos.lat, bhuPos.lng],
         ],
         {
-          color: incident?.ambulance_requested ? CRITICAL : MINT,
+          color: CRITICAL,
           weight: 2,
           opacity: 0.35,
           dashArray: '4, 6',
@@ -503,10 +507,10 @@ export function SituationMap({
     // - Ambulance starts moving 4s after emergency registration (completely independent of responder).
     // - Responder starts moving once invite is accepted.
     // - Responder duration: 10s (reaches patient first).
-    // - Ambulance duration: 40s (slowed down for smooth long-distance observation from hospital).
+    // - Ambulance duration: 80s (slowed down significantly for realistic long-distance rural transfer observation).
     const RESPONDER_DURATION_MS = 10_000
     const AMBULANCE_DELAY_MS = 4_000
-    const AMBULANCE_DURATION_MS = 40_000
+    const AMBULANCE_DURATION_MS = 80_000
 
     const respWaypoints =
       baseResponderPos && reporterPos
@@ -646,6 +650,13 @@ export function SituationMap({
   const effectiveRespAlpha = isIncidentClosed || isResponderArrived ? 1 : isAccepted ? respProgress : 0
   const effectiveAmbAlpha = isIncidentClosed ? 1 : ambProgress
 
+  const respArrived = effectiveRespAlpha >= 1
+  const ambArrived = isAmbulanceRequested ? effectiveAmbAlpha >= 1 : false
+
+  useEffect(() => {
+    onArrivalChange?.({ responderArrived: respArrived, ambulanceArrived: ambArrived })
+  }, [respArrived, ambArrived, onArrivalChange])
+
   const currentLegKm =
     initialLegKm !== null
       ? Math.max(0, initialLegKm * (1 - effectiveRespAlpha))
@@ -703,7 +714,7 @@ export function SituationMap({
               <span className="font-bold text-sky-400 tabular-nums">
                 {currentLegKm.toFixed(1)} km
                 <span className="ml-1 text-[10px] font-normal text-sky-300/80 animate-pulse">
-                  (en route · روانہ ہو چکا ہے)
+                  (en route · مطلع کیا جا چکا ہے)
                 </span>
               </span>
             ) : (
@@ -740,7 +751,7 @@ export function SituationMap({
               <span className="font-bold text-amber-400 tabular-nums">
                 {currentTransferKm.toFixed(1)} km
                 <span className="ml-1 text-[10px] font-normal text-amber-300/90 animate-pulse">
-                  (ambulance en route · روانہ ہو چکی ہے)
+                  (ambulance en route · مطلع کیا جا چکا ہے)
                 </span>
               </span>
             ) : isAmbulanceRequested ? (

@@ -28,11 +28,11 @@ import {
   getHealth,
   getIncident,
   getIncidentTimeline,
-  helpBotStep as apiHelpBotStep,
   listIncidents,
   listResponders,
   reportEmergency,
   responderArrived,
+  responderChat as apiResponderChat,
   responderRespond,
   updateResponderStatus,
   verifyResponder as apiVerifyResponder,
@@ -53,6 +53,7 @@ import type {
   ReportResponse,
   ReporterUpdate,
   Responder,
+  ResponderChatResponse,
   TimelineResponse,
 } from '../lib/types'
 import { DEFAULT_SEED_RESPONDERS } from '../lib/geography'
@@ -171,6 +172,7 @@ export interface CockpitValue {
   ) => Promise<unknown | null>
   markArrived: () => Promise<unknown | null>
   sendHelpBotTurn: (transcript: string) => Promise<HelpBotStepResponse | null>
+  sendResponderChat: (message: string) => Promise<ResponderChatResponse | null>
   closeActiveIncident: (params: {
     outcome: OutcomeType
     confirmed_by: OutcomeConfirmer
@@ -377,6 +379,47 @@ export function CockpitProvider({ children }: { children: ReactNode }) {
     healthPoll.error ?? (backendOnline ? null : timelinePoll.error)
 
   // -------------------------------------------------------------------------
+  // Derived state
+  // -------------------------------------------------------------------------
+
+  const record = recordPoll.data
+  const incident: Incident | null = useMemo(() => {
+    if (record?.incident) return record.incident
+    if (lastReport?.incident && lastReport.incident.incident_id === incidentId) {
+      return lastReport.incident
+    }
+    return null
+  }, [record, lastReport, incidentId])
+
+  const timeline: TimelineResponse | null = useMemo(() => {
+    if (timelinePoll.data) return timelinePoll.data
+    if (lastReport?.incident && lastReport.incident.incident_id === incidentId) {
+      const updates: ReporterUpdate[] =
+        lastReport.incident.reporter_updates && lastReport.incident.reporter_updates.length > 0
+          ? lastReport.incident.reporter_updates
+          : [
+              {
+                update_id: `UPD-${lastReport.incident.incident_id}-0`,
+                timestamp: lastReport.incident.timestamp_reported || new Date().toISOString(),
+                stage: 'reported',
+                message_urdu: 'آپ کی ایمرجنسی کی اطلاع موصول ہو چکی ہے۔ سسٹم قریبی رضاکار تلاش کر رہا ہے۔',
+                severity_tier: lastReport.incident.severity_tier,
+              },
+            ]
+      return {
+        incident_id: lastReport.incident.incident_id,
+        status: String(lastReport.dispatch?.status ?? 'reported'),
+        severity_tier: lastReport.incident.severity_tier,
+        assigned_responder: lastReport.incident.responder_assigned_id ?? null,
+        coverage_gap: lastReport.incident.coverage_gap ?? false,
+        mid_incident_escalated: lastReport.incident.mid_incident_escalated ?? false,
+        updates,
+      }
+    }
+    return null
+  }, [timelinePoll.data, lastReport, incidentId])
+
+  // -------------------------------------------------------------------------
   // Actions
   // -------------------------------------------------------------------------
 
@@ -538,50 +581,62 @@ export function CockpitProvider({ children }: { children: ReactNode }) {
     timelinePoll,
   ])
 
-  const sendHelpBotTurn = useCallback(
-    async (transcript: string): Promise<HelpBotStepResponse | null> => {
-      if (!incidentId) {
-        pushToast({
-          tone: 'error',
-          title: 'No active incident',
-          message: 'Report an emergency before starting the help bot.',
-        })
-        return null
-      }
+  const sendResponderChat = useCallback(
+    async (message: string): Promise<ResponderChatResponse | null> => {
+      const activeIncId = incidentId ?? incident?.incident_id ?? lastReport?.incident?.incident_id ?? 'INC-DEMO-ACTIVE'
+      const assignedRespId = incidentResponderId(record, lastReport) ?? activeResponderId ?? 'RESP-TAM-01'
+
+      const trimmed = message.trim()
+      if (!trimmed) return null
+
       setBotTurns((prev) => [
         ...prev,
-        { speaker: 'responder', text: transcript, at: Date.now() },
+        { speaker: 'responder', text: trimmed, at: Date.now() },
       ])
+
       try {
-        const res = await apiHelpBotStep({
-          incident_id: incidentId,
-          responder_transcript: transcript,
+        const historyPayload = botTurns
+          .filter((t) => t.intent !== 'error' && !t.text.includes('ہدایت حاصل نہیں ہو سکی'))
+          .map((t) => ({
+            role: t.speaker === 'responder' ? ('user' as const) : ('assistant' as const),
+            content: t.text,
+          }))
+
+        const res = await apiResponderChat({
+          incident_id: activeIncId,
+          responder_id: assignedRespId,
+          message: trimmed,
+          chat_history: historyPayload,
         })
-        const spokenText =
-          res.intent === 'out_of_scope'
-            ? 'معذرت، میں اس سوال کا جواب دینے کے لیے تربیت یافتہ نہیں ہوں۔ / Sorry, I am not trained to answer this question.'
-            : (res.spoken_text_urdu || 'معذرت، میں اس سوال کا جواب دینے کے لیے تربیت یافتہ نہیں ہوں۔ / Sorry, I am not trained to answer this question.')
+
+        const replyText =
+          res.reply ??
+          (res as any)?.data?.reply ??
+          'ہدایت موصول ہوئی۔'
+
         setBotTurns((prev) => [
           ...prev,
           {
             speaker: 'bot',
-            text: spokenText,
+            text: replyText,
             at: Date.now(),
-            intent: res.intent,
             audioUrl: res.audio_url,
             escalated: res.escalated,
           },
         ])
+
         if (res.escalated) {
           pushToast({
             tone: 'critical',
-            title: 'Mid-incident escalation triggered',
-            message: `Signal: ${res.escalation_signal ?? 'condition_worsening'} — Emergency fallback engaged, ambulance requested.`,
+            title: 'Critical Escalation Alert',
+            message: 'Patient condition worsening detected. Emergency priority elevated.',
           })
         }
+
         await Promise.all([timelinePoll.refresh(), recordPoll.refresh()])
         return res
       } catch (cause) {
+        console.error('Copilot fetch failed:', cause)
         setBotTurns((prev) => [
           ...prev,
           {
@@ -591,11 +646,46 @@ export function CockpitProvider({ children }: { children: ReactNode }) {
             intent: 'error',
           },
         ])
-        reportFailure('Help-bot turn failed', cause)
+        reportFailure('Responder Copilot request failed', cause)
         return null
       }
     },
-    [incidentId, pushToast, recordPoll, reportFailure, timelinePoll],
+    [
+      incidentId,
+      incident,
+      lastReport,
+      record,
+      activeResponderId,
+      botTurns,
+      pushToast,
+      recordPoll,
+      reportFailure,
+      timelinePoll,
+    ],
+  )
+
+  const sendHelpBotTurn = useCallback(
+    async (transcript: string): Promise<HelpBotStepResponse | null> => {
+      const res = await sendResponderChat(transcript)
+      if (!res) return null
+      return {
+        incident_id: res.incident_id,
+        branch_id: 'clinical_copilot',
+        state: 'ongoing_guidance',
+        intent: 'conversational_guidance',
+        qa_entry_id: null,
+        escalation_signal: res.escalated ? 'condition_worsening' : null,
+        escalated: Boolean(res.escalated),
+        escalation_snapshot: null,
+        spoken_text_urdu: res.reply,
+        step_index: 0,
+        step_id: null,
+        turn_count: botTurns.length,
+        audio_url: res.audio_url ?? null,
+        audio_cached: Boolean(res.audio_url),
+      }
+    },
+    [sendResponderChat, botTurns.length],
   )
 
   const closeActiveIncident = useCallback(
@@ -744,47 +834,6 @@ export function CockpitProvider({ children }: { children: ReactNode }) {
   }, [healthPoll, recordPoll, respondersPoll, timelinePoll])
 
 
-  // -------------------------------------------------------------------------
-  // Derived
-  // -------------------------------------------------------------------------
-
-  const record = recordPoll.data
-  const incident: Incident | null = useMemo(() => {
-    if (record?.incident) return record.incident
-    if (lastReport?.incident && lastReport.incident.incident_id === incidentId) {
-      return lastReport.incident
-    }
-    return null
-  }, [record, lastReport, incidentId])
-
-  const timeline: TimelineResponse | null = useMemo(() => {
-    if (timelinePoll.data) return timelinePoll.data
-    if (lastReport?.incident && lastReport.incident.incident_id === incidentId) {
-      const updates: ReporterUpdate[] =
-        lastReport.incident.reporter_updates && lastReport.incident.reporter_updates.length > 0
-          ? lastReport.incident.reporter_updates
-          : [
-              {
-                update_id: `UPD-${lastReport.incident.incident_id}-0`,
-                timestamp: lastReport.incident.timestamp_reported || new Date().toISOString(),
-                stage: 'reported',
-                message_urdu: 'آپ کی ایمرجنسی کی اطلاع موصول ہو چکی ہے۔ سسٹم قریبی رضاکار تلاش کر رہا ہے۔',
-                severity_tier: lastReport.incident.severity_tier,
-              },
-            ]
-      return {
-        incident_id: lastReport.incident.incident_id,
-        status: String(lastReport.dispatch?.status ?? 'reported'),
-        severity_tier: lastReport.incident.severity_tier,
-        assigned_responder: lastReport.incident.responder_assigned_id ?? null,
-        coverage_gap: lastReport.incident.coverage_gap ?? false,
-        mid_incident_escalated: lastReport.incident.mid_incident_escalated ?? false,
-        updates,
-      }
-    }
-    return null
-  }, [timelinePoll.data, lastReport, incidentId])
-
   const value = useMemo<CockpitValue>(
     () => ({
       role,
@@ -816,6 +865,7 @@ export function CockpitProvider({ children }: { children: ReactNode }) {
       respond,
       markArrived,
       sendHelpBotTurn,
+      sendResponderChat,
       closeActiveIncident,
       verifyCandidate,
       adoptIncident,
@@ -859,6 +909,7 @@ export function CockpitProvider({ children }: { children: ReactNode }) {
       respond,
       markArrived,
       sendHelpBotTurn,
+      sendResponderChat,
       closeActiveIncident,
       verifyCandidate,
       adoptIncident,

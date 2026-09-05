@@ -121,6 +121,9 @@ export interface Incident {
   detected_emergency?: string | null
   anticipated_condition?: string | null
   first_aid_guidance?: string[] | null
+  clinical_condition?: string | null
+  clinical_category?: 'CATEGORY_A' | 'CATEGORY_B' | 'CATEGORY_C' | null
+  dispatch_responder?: boolean
 }
 
 export interface TriageAnalysisResponse {
@@ -129,6 +132,11 @@ export interface TriageAnalysisResponse {
   anticipated_condition: string
   severity_tier: SeverityTier
   injury_type_flags: string[]
+  clinical_category?: 'CATEGORY_A' | 'CATEGORY_B' | 'CATEGORY_C' | null
+  clinical_condition?: string | null
+  dispatch_responder?: boolean
+  request_ambulance?: boolean
+  escalate_bhu?: boolean
   voice_signals?: string
   image_signals?: string
   confidence?: number
@@ -184,6 +192,9 @@ export interface ReportResponse {
     notify_bhu: boolean
     bhu_urgency: 'standby' | 'urgent' | null
     ambulance_requested: boolean
+    dispatch_responder?: boolean
+    clinical_category?: 'CATEGORY_A' | 'CATEGORY_B' | 'CATEGORY_C' | null
+    clinical_condition?: string | null
     reasoning: string
   }
   db_persisted: boolean
@@ -223,6 +234,28 @@ export interface ArrivedResponse {
   status: 'ok'
   incident_id: string
   arrival_update: ReporterUpdate
+}
+
+export interface ResponderChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+/** POST /responder/chat -> Conversational AI Copilot */
+export interface ResponderChatRequest {
+  incident_id: string
+  responder_id: string
+  message: string
+  chat_history?: ResponderChatMessage[]
+}
+
+export interface ResponderChatResponse {
+  incident_id: string
+  responder_id: string
+  reply: string
+  audio_url?: string | null
+  escalated?: boolean
+  steps?: string[]
 }
 
 /** POST /helpbot/step -> Module 2 guidance turn */

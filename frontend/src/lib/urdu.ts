@@ -40,7 +40,7 @@ export const STAGE_META: Record<string, StageMeta> = {
   responder_en_route: {
     label_en: 'Responder en route',
     fallback_ur:
-      'مددگار نے الرٹ قبول کر لیا ہے اور وہ جائے وقوعہ کی طرف روانہ ہیں۔',
+      'مددگار نے الرٹ قبول کر لیا ہے اور وہ جائے وقوعہ کے لیے مطلع ہیں۔',
     order: 3,
     tone: 'cyan',
   },
