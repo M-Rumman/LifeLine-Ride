@@ -1,1 +1,152 @@
+# ==============================================================================
+# LifeLine Ride — Git Ignore Rules
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Environment & Configuration (.env files)
+# ------------------------------------------------------------------------------
 .env
+.env.*
+*.env
+*.env.*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+backend/.env
+frontend/.env.local
+frontend/.env.*.local
+
+# Allow example / template environment files
+!.env.example
+!frontend/.env.example
+
+# ------------------------------------------------------------------------------
+# 2. Service Account JSON & Cloud Credentials
+# ------------------------------------------------------------------------------
+*service_account*.json
+*service-account*.json
+service_account.json
+service-account.json
+firebase-adminsdk*.json
+google-credentials*.json
+gcp-key*.json
+aws-credentials*
+*.credentials.json
+credentials.json
+client_secret*.json
+client_secrets*.json
+
+# ------------------------------------------------------------------------------
+# 3. API Keys, Secrets & Access Tokens
+# ------------------------------------------------------------------------------
+*api_key*
+*apikey*
+*api-key*
+*secret*.json
+*secret*.yaml
+*secret*.yml
+*secret*.txt
+*token*.json
+auth_token*
+access_token*
+.auth/
+.jwt*
+
+# ------------------------------------------------------------------------------
+# 4. Private Keys, Keystores & Certificates
+# ------------------------------------------------------------------------------
+*.pem
+*.key
+*.pkcs12
+*.pfx
+*.p12
+*.cert
+*.crt
+*.csr
+*.keystore
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+
+# ------------------------------------------------------------------------------
+# 5. Database Passwords, Configs & Dumps
+# ------------------------------------------------------------------------------
+*db_password*
+*database_password*
+*database*.conf
+*.sql
+*.dump
+*.sqlite
+*.sqlite3
+*.db
+pgpass*
+.pgpass
+
+# ------------------------------------------------------------------------------
+# 6. Python Artifacts, Cache & Virtual Environments
+# ------------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# ------------------------------------------------------------------------------
+# 7. Node / Frontend Build & Logs
+# ------------------------------------------------------------------------------
+node_modules/
+.npm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.vercel
+dist/
+dist-ssr/
+
+# ------------------------------------------------------------------------------
+# 8. OS & Editor Temporary Files
+# ------------------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.swp
+*.swo
+*~
+*.log
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
