@@ -58,7 +58,14 @@ if str(_BACKEND_DIR) not in [str(p) for p in sys.path]:
     sys.path.insert(0, str(_BACKEND_DIR))
 
 import slice_runner  # Module 1: contracts, seed data, INCIDENT_STORE
-from geography import coverage_village_id, bhu_id_for_village
+from geography import (
+    coverage_village_id,
+    bhu_id_for_village,
+    haversine_distance_km,
+    calculate_eta_minutes,
+    calculate_responder_coords,
+)
+
 
 # ---------------------------------------------------------------------------
 # CONFIGURATION — env-based, consistent with TRIAGE_CALL_TIMEOUT_S pattern
@@ -235,28 +242,49 @@ def decideDispatch(incident: slice_runner.Incident) -> DispatchDecision:
             None,
         )
 
+    declined_ids = getattr(incident, "declined_responder_ids", []) or []
+
     # --- Ranked responder list: village-specific first, then fallback to coverage group ---
-    direct_village_responders = [
+    direct_candidates = [
         r for r in slice_runner.SEED_RESPONDERS
         if r.village == village_id
-        and r.current_availability_status == "available"
+        and (r.current_availability_status or "").lower() in ("available", "idle")
         and getattr(r, "is_verified", False) is True
+        and r.responder_id not in declined_ids
     ]
-    if direct_village_responders:
-        ranked = direct_village_responders
+    if direct_candidates:
+        candidates = direct_candidates
     elif village_id in ("VILLAGE-A", "VILLAGE-B", "VILLAGE-C"):
-        ranked = [
+        candidates = [
             r for r in slice_runner.SEED_RESPONDERS
             if r.village == coverage_id
-            and r.current_availability_status == "available"
+            and (r.current_availability_status or "").lower() in ("available", "idle")
             and getattr(r, "is_verified", False) is True
+            and r.responder_id not in declined_ids
         ]
     else:
-        ranked = []
+        candidates = []
+
+    # --- Calculate distance & ETA relative to reporter GPS coordinates ---
+    rep_lat = incident.gps_location.latitude
+    rep_lon = incident.gps_location.longitude
+    for r in candidates:
+        if getattr(r, "latitude", None) is None or getattr(r, "longitude", None) is None:
+            r.latitude, r.longitude = calculate_responder_coords(r.village)
+        r.distance_km = haversine_distance_km(rep_lat, rep_lon, r.latitude, r.longitude)
+        r.eta_minutes = calculate_eta_minutes(r.distance_km)
+
+    # --- Prioritized Queue: strictly sort in ascending order of distance ---
+    ranked = sorted(candidates, key=lambda r: (r.distance_km if r.distance_km is not None else 999.0))
 
     # --- No available responder: escalate to BHU-only ---
     if not ranked:
         bhu_name = linked_bhu.name if linked_bhu else "None"
+        incident.responder_assigned_id = None
+        incident.responder_distance_km = None
+        incident.responder_eta_minutes = None
+        status_val = "escalated_bhu_only" if linked_bhu else "no_local_responders_available"
+        incident.status = status_val
         return DispatchDecision(
             incident_id=incident.incident_id,
             ranked_responders=[],
@@ -268,7 +296,7 @@ def decideDispatch(incident: slice_runner.Incident) -> DispatchDecision:
             dispatch_responder=dispatch_responder,
             clinical_category=clinical_category,
             clinical_condition=clinical_condition,
-            status="escalated_bhu_only" if linked_bhu else "no_resources",
+            status=status_val,
             reasoning=(
                 f"No available responders in {village_id}. "
                 f"Escalated to {bhu_name}. Tier: {tier}. Clinical: {clinical_condition} ({clinical_category})."
@@ -277,6 +305,7 @@ def decideDispatch(incident: slice_runner.Incident) -> DispatchDecision:
 
     # --- Zero dispatch (Category C) check when not escalated ---
     if not dispatch_responder and not ambulance_requested and tier == "minor":
+        incident.status = "self_care_only"
         return DispatchDecision(
             incident_id=incident.incident_id,
             ranked_responders=ranked,
@@ -294,8 +323,12 @@ def decideDispatch(incident: slice_runner.Incident) -> DispatchDecision:
             ),
         )
 
-    # --- Primary responder selected; ranked list kept for fallback walker ---
+    # --- Primary responder strictly selected from queue[0] (nearest available) ---
     primary = ranked[0]
+    incident.responder_assigned_id = primary.responder_id
+    incident.responder_distance_km = primary.distance_km
+    incident.responder_eta_minutes = primary.eta_minutes
+    incident.status = "dispatched"
 
     # --- Notification flags driven by clinical category ---
     if clinical_category == "CATEGORY_A" or tier == "critical" or ambulance_requested:
@@ -313,8 +346,8 @@ def decideDispatch(incident: slice_runner.Incident) -> DispatchDecision:
 
     bhu_desc = f"notify {urgency}" if notify_bhu else "no notification"
     reasoning = (
-        f"Selected {primary.name} ({primary.responder_id}) from {village_id} "
-        f"[{len(ranked)} available, ranked by list position]. "
+        f"Selected nearest: {primary.name} ({primary.responder_id}) from {village_id} "
+        f"[distance: {primary.distance_km} km, ETA: {primary.eta_minutes} min, {len(ranked)} available]. "
         f"Tier: {tier}. Clinical: {clinical_condition} ({clinical_category}). BHU: {bhu_desc}. Ambulance: {ambulance}."
     )
 
@@ -332,6 +365,7 @@ def decideDispatch(incident: slice_runner.Incident) -> DispatchDecision:
         status="dispatched",
         reasoning=reasoning,
     )
+
 
 
 # ===========================================================================
@@ -395,28 +429,28 @@ def sendNotification(
         # Mark busy — same state mutation as dispatch() in slice_runner.
         r.current_availability_status = "busy"
         incident.responder_assigned_id = r.responder_id
+        incident.responder_distance_km = getattr(r, "distance_km", None)
+        incident.responder_eta_minutes = getattr(r, "eta_minutes", None)
+        incident.status = "dispatched"
         incident.responder_dispatch_timestamp = now
-        print(f"  [DISPATCH LOG] Assigned: {r.name} ({r.responder_id}) -> Status set to BUSY.")
+        print(f"  [DISPATCH LOG] Assigned: {r.name} ({r.responder_id}) [dist={getattr(r, 'distance_km', None)}km, eta={getattr(r, 'eta_minutes', None)}m] -> Status set to BUSY.")
         _append_dispatch_event(incident, {
             "event": "responder_dispatched",
             "responder_id": r.responder_id,
             "responder_name": r.name,
+            "distance_km": getattr(r, "distance_km", None),
+            "eta_minutes": getattr(r, "eta_minutes", None),
             "tier": tier,
         })
         # Module 9: Append responder_notified update
+        dist_suffix = f" (فاصلہ: {r.distance_km} کلومیٹر)" if getattr(r, "distance_km", None) is not None else ""
         incident.reporter_updates.append({
             "update_id": f"UPD-{uuid.uuid4().hex[:6].upper()}",
             "timestamp": now,
             "stage": "responder_notified",
-            "message_urdu": f"مددگار {r.name} کو اطلاع دے دی گئی ہے۔",
+            "message_urdu": f"مددگار {r.name} کو اطلاع دے دی گئی ہے{dist_suffix}۔",
             "severity_tier": tier,
         })
-        # Start ack timeout timer BEFORE the DB write-through. The responder's
-        # timeout window must be measured from the dispatch decision; a slow
-        # PostgreSQL round-trip in front of it delayed arming the timer, which
-        # let it fire *after* the responder had already acknowledged and logged
-        # a spurious ack_timeout against them.
-        _start_ack_timer(incident.incident_id, r.responder_id)
         # Part B persistence fix: write-through to PostgreSQL so availability
         # status survives process restarts. Narrow update — touches ONLY the
         # status column, so Module 5's persisted status_flag (stored in the
@@ -436,7 +470,7 @@ def sendNotification(
         if not incident.bhu_notified:
             incident.bhu_notified = True
             incident.bhu_notify_timestamp = now
-        if decision.status in ("escalated_bhu_only", "no_resources"):
+        if decision.status in ("escalated_bhu_only", "no_resources", "no_local_responders_available"):
             print(f"  [DISPATCH WARNING] No responders available in "
                   f"{incident.gps_location.village_id}. "
                   f"Escalated to {bhu.name}.")
@@ -444,7 +478,7 @@ def sendNotification(
               f"({'Standby' if urgency_label == 'standby' else 'Urgent'}).")
         event_name = (
             "escalated_bhu_only"
-            if decision.status in ("escalated_bhu_only", "no_resources")
+            if decision.status in ("escalated_bhu_only", "no_resources", "no_local_responders_available")
             else "bhu_notified"
         )
         event_payload: dict = {
@@ -460,7 +494,7 @@ def sendNotification(
 
         # Module 9: Localized BHU notification update
         if not any(u.get("stage") in ("bhu_notified", "escalated_bhu_only") for u in incident.reporter_updates):
-            if decision.status in ("escalated_bhu_only", "no_resources"):
+            if decision.status in ("escalated_bhu_only", "no_resources", "no_local_responders_available"):
                 bhu_msg = "علاقے میں کوئی رضاکار دستیاب نہیں — براہ راست بنیادی مرکز صحت (BHU) کو ایمرجنسی بھیج دی گئی ہے۔"
                 stage_name = "escalated_bhu_only"
             else:
@@ -479,7 +513,7 @@ def sendNotification(
                 "severity_tier": tier,
             })
 
-    elif not decision.notify_bhu and decision.status in ("escalated_bhu_only", "no_resources"):
+    elif not decision.notify_bhu and decision.status in ("escalated_bhu_only", "no_resources", "no_local_responders_available"):
         # Edge case: escalated but no BHU linked at all.
         _warn(
             f"No responders AND no linked BHU for "
@@ -511,6 +545,13 @@ def sendNotification(
                 "severity_tier": tier,
             })
 
+    # Module 6.5: sync snapshot and write through to PostgreSQL.
+    _sync_store_snapshot(incident)
+    _db_upsert_incident(incident.incident_id, incident)
+
+    # Arm ack timeout timer after dispatch write-through completes
+    if decision.selected_responder:
+        _start_ack_timer(incident.incident_id, decision.selected_responder.responder_id)
 
 
 
@@ -527,6 +568,21 @@ def _start_ack_timer(incident_id: str, responder_id: str) -> None:
              f"on incident {incident_id}. Triggering fallback.")
         incident = _get_incident(incident_id)
         if incident:
+            if getattr(incident, "declined_responder_ids", None) is None:
+                incident.declined_responder_ids = []
+            if responder_id not in incident.declined_responder_ids:
+                incident.declined_responder_ids.append(responder_id)
+
+            for r in slice_runner.SEED_RESPONDERS:
+                if r.responder_id == responder_id:
+                    r.current_availability_status = "available"
+                    try:
+                        from models.responder_model import update_responder_availability
+                        update_responder_availability(r.responder_id, "available")
+                    except Exception as _exc:
+                        _warn(f"DB write-through for available status failed (non-fatal): {_exc}")
+                    break
+
             _append_dispatch_event(incident, {
                 "event": "ack_timeout",
                 "responder_id": responder_id,
@@ -592,20 +648,13 @@ def acknowledgeDispatch(incident_id: str, responder_id: str) -> None:
 # ===========================================================================
 
 def _fallback_dispatch(incident_id: str, reason: str = "unknown") -> None:
-    """Step to the next ranked responder. If the list is exhausted, escalate
-    to BHU-only — same outcome as 'no available responder' from the start."""
+    """Step to the next nearest eligible responder or escalate to BHU-only."""
     with _STATE_LOCK:
-        state = _DISPATCH_STATE.get(incident_id)
-        if not state:
-            _warn(f"_fallback_dispatch: no state for {incident_id}")
-            return
+        state = _DISPATCH_STATE.get(incident_id, {})
         old_timer = state.get("ack_timer")
         if old_timer:
             old_timer.cancel()
             state["ack_timer"] = None
-        state["fallback_index"] = state.get("fallback_index", 0) + 1
-        idx = state["fallback_index"]
-        ranked = state.get("ranked_responders", [])
 
     incident = state.get("incident") or _get_incident(incident_id)
     if incident is None:
@@ -613,39 +662,120 @@ def _fallback_dispatch(incident_id: str, reason: str = "unknown") -> None:
         return
 
     incident.dispatch_fallback_count += 1
-    _log(f"Fallback triggered for {incident_id} "
-         f"(reason={reason}, fallback_count={incident.dispatch_fallback_count}).")
+    declined_ids = getattr(incident, "declined_responder_ids", []) or []
+
+    village_id = incident.gps_location.village_id
+    coverage_id = coverage_village_id(village_id)
+
+    # Filter remaining eligible responders:
+    # 1. village match
+    # 2. available/idle (not busy/offline)
+    # 3. is_verified
+    # 4. NOT in declined_responder_ids
+    direct_candidates = [
+        r for r in slice_runner.SEED_RESPONDERS
+        if r.village == village_id
+        and (r.current_availability_status or "").lower() in ("available", "idle")
+        and getattr(r, "is_verified", False) is True
+        and r.responder_id not in declined_ids
+    ]
+    if direct_candidates:
+        remaining_pool = direct_candidates
+    elif village_id in ("VILLAGE-A", "VILLAGE-B", "VILLAGE-C"):
+        remaining_pool = [
+            r for r in slice_runner.SEED_RESPONDERS
+            if r.village == coverage_id
+            and (r.current_availability_status or "").lower() in ("available", "idle")
+            and getattr(r, "is_verified", False) is True
+            and r.responder_id not in declined_ids
+        ]
+    else:
+        remaining_pool = []
+
+    # Calculate distance & ETA relative to reporter GPS coordinates
+    rep_lat = incident.gps_location.latitude
+    rep_lon = incident.gps_location.longitude
+    for r in remaining_pool:
+        if getattr(r, "latitude", None) is None or getattr(r, "longitude", None) is None:
+            r.latitude, r.longitude = calculate_responder_coords(r.village)
+        r.distance_km = haversine_distance_km(rep_lat, rep_lon, r.latitude, r.longitude)
+        r.eta_minutes = calculate_eta_minutes(r.distance_km)
+
+    # Sort strictly ascending by distance
+    remaining_pool.sort(key=lambda r: (r.distance_km if r.distance_km is not None else 999.0))
+
+    _log(f"Fallback triggered for {incident_id} (reason={reason}, fallback_count={incident.dispatch_fallback_count}, remaining={len(remaining_pool)}).")
     _append_dispatch_event(incident, {
         "event": "fallback_triggered",
         "reason": reason,
-        "fallback_index": idx,
+        "fallback_index": incident.dispatch_fallback_count,
         "fallback_count": incident.dispatch_fallback_count,
     })
 
-    if idx < len(ranked):
-        next_responder = ranked[idx]
-        _log(f"Falling through to {next_responder.name} ({next_responder.responder_id}).")
+    if remaining_pool:
+        next_responder = remaining_pool[0]
+        _log(f"Falling through to {next_responder.name} ({next_responder.responder_id}) [dist={next_responder.distance_km} km, eta={next_responder.eta_minutes} min].")
         print(f"  [DISPATCH LOG] Fallback: dispatching {next_responder.name} "
-              f"({next_responder.responder_id}) (rank {idx + 1}/{len(ranked)}).")
-        # Build a minimal decision for the new responder only (BHU/ambulance
-        # already notified in the original dispatch — no duplicates).
-        next_decision = DispatchDecision(
-            incident_id=incident_id,
-            ranked_responders=ranked,
-            selected_responder=next_responder,
-            bhu=None,
-            notify_bhu=False,
-            bhu_urgency=None,
-            ambulance_requested=False,
-            status="dispatched",
-            reasoning=f"Fallback rank {idx + 1}: {next_responder.name}",
-        )
+              f"({next_responder.responder_id}) (rank {incident.dispatch_fallback_count + 1}, {next_responder.distance_km} km).")
+
+        now = _now_iso()
+        # Mark busy
+        next_responder.current_availability_status = "busy"
+        try:
+            from models.responder_model import update_responder_availability
+            update_responder_availability(next_responder.responder_id, "busy")
+        except Exception as _exc:
+            _warn(f"DB write-through for busy status failed (non-fatal): {_exc}")
+
+        incident.responder_assigned_id = next_responder.responder_id
+        incident.responder_distance_km = next_responder.distance_km
+        incident.responder_eta_minutes = next_responder.eta_minutes
+        incident.status = "REASSIGNED_TO_NEXT_RESPONDER"
+        incident.responder_dispatch_timestamp = now
+
+        _append_dispatch_event(incident, {
+            "event": "reassigned_to_next_responder",
+            "responder_id": next_responder.responder_id,
+            "responder_name": next_responder.name,
+            "distance_km": next_responder.distance_km,
+            "eta_minutes": next_responder.eta_minutes,
+            "tier": incident.severity_tier,
+        })
+        _append_dispatch_event(incident, {
+            "event": "responder_dispatched",
+            "responder_id": next_responder.responder_id,
+            "responder_name": next_responder.name,
+            "distance_km": next_responder.distance_km,
+            "eta_minutes": next_responder.eta_minutes,
+            "tier": incident.severity_tier,
+        })
+
+        incident.reporter_updates.append({
+            "update_id": f"UPD-{uuid.uuid4().hex[:6].upper()}",
+            "timestamp": now,
+            "stage": "responder_notified",
+            "message_urdu": f"پہلے رضاکار کی عدم دستیابی پر الرٹ اگلے قریبی رضاکار {next_responder.name} کو تفویض کر دیا گیا ہے (فاصلہ: {next_responder.distance_km} کلومیٹر، متوقع وقت: {next_responder.eta_minutes} منٹ)۔",
+            "severity_tier": incident.severity_tier,
+        })
+
         with _STATE_LOCK:
-            _DISPATCH_STATE[incident_id]["fallback_index"] = idx
-        sendNotification(next_decision, incident)
+            st = _DISPATCH_STATE.get(incident_id, {})
+            st["incident"] = incident
+            st["ranked_responders"] = remaining_pool
+            st["selected_responder"] = next_responder
+            _DISPATCH_STATE[incident_id] = st
+
+        _start_ack_timer(incident_id, next_responder.responder_id)
+        _sync_store_snapshot(incident)
+        _db_upsert_incident(incident_id, incident)
     else:
-        # Ranked list exhausted — BHU-only escalation.
+        # Ranked list exhausted — BHU-only escalation
+        incident.responder_assigned_id = None
+        incident.responder_distance_km = None
+        incident.responder_eta_minutes = None
+        incident.status = "ESCALATED_TO_BHU_ONLY"
         incident.coverage_gap = True
+
         if not any(e.get("event") == "coverage_gap_flagged" for e in incident.dispatch_events):
             _append_dispatch_event(incident, {
                 "event": "coverage_gap_flagged",
@@ -654,26 +784,24 @@ def _fallback_dispatch(incident_id: str, reason: str = "unknown") -> None:
                 "reason": "candidates_exhausted_or_unavailable",
             })
         _log(f"Ranked list exhausted for {incident_id}. Escalating to BHU-only.")
-        print(f"  [DISPATCH WARNING] All ranked responders exhausted for "
-              f"{incident_id}. Escalating to BHU-only.")
+        print(f"  [DISPATCH WARNING] All ranked responders exhausted for {incident_id}. Escalating to BHU-only.")
         _append_dispatch_event(incident, {
             "event": "all_responders_exhausted",
             "fallback_count": incident.dispatch_fallback_count,
         })
-        village_id = incident.gps_location.village_id
-        bhu = next(
-            (b for b in slice_runner.SEED_BHUS if village_id in b.linked_village_ids),
-            None
-        )
+
+        target_bhu_id = bhu_id_for_village(village_id)
+        bhu = next((b for b in slice_runner.SEED_BHUS if target_bhu_id and b.bhu_id == target_bhu_id), None)
+        if bhu is None:
+            bhu = next((b for b in slice_runner.SEED_BHUS if village_id in b.linked_village_ids or coverage_id in b.linked_village_ids), None)
+
         if bhu and not incident.bhu_notified:
             tier = incident.severity_tier
             urgency = "urgent" if tier == "critical" else "standby"
             incident.bhu_notified = True
             incident.bhu_notify_timestamp = _now_iso()
-            print(f"  [DISPATCH WARNING] No responders available in {village_id}. "
-                  f"Escalated to {bhu.name}.")
-            print(f"  [DISPATCH LOG] {bhu.name} notified "
-                  f"({'Standby' if urgency == 'standby' else 'Urgent'}).")
+            print(f"  [DISPATCH WARNING] No responders available in {village_id}. Escalated to {bhu.name}.")
+            print(f"  [DISPATCH LOG] {bhu.name} notified ({'Standby' if urgency == 'standby' else 'Urgent'}).")
             _append_dispatch_event(incident, {
                 "event": "escalated_bhu_only",
                 "bhu_id": bhu.bhu_id,
@@ -683,6 +811,23 @@ def _fallback_dispatch(incident_id: str, reason: str = "unknown") -> None:
             })
         elif incident.bhu_notified:
             _log(f"BHU already notified for {incident_id}; no duplicate.")
+
+        incident.reporter_updates.append({
+            "update_id": f"UPD-{uuid.uuid4().hex[:6].upper()}",
+            "timestamp": _now_iso(),
+            "stage": "bhu_notified",
+            "message_urdu": "علاقے میں کوئی رضاکار دستیاب نہیں — ایمرجنسی براہ راست بنیادی مرکز صحت (BHU) کو منتقل کر دی گئی ہے۔",
+            "severity_tier": incident.severity_tier,
+        })
+
+        with _STATE_LOCK:
+            st = _DISPATCH_STATE.get(incident_id, {})
+            st["incident"] = incident
+            st["selected_responder"] = None
+            _DISPATCH_STATE[incident_id] = st
+
+        _sync_store_snapshot(incident)
+        _db_upsert_incident(incident_id, incident)
 
 
 # ===========================================================================
@@ -695,16 +840,20 @@ def handleResponderDecline(incident_id: str, responder_id: str) -> None:
     _log(f"Explicit decline from {responder_id} for {incident_id}.")
     with _STATE_LOCK:
         state = _DISPATCH_STATE.get(incident_id)
-        if not state:
-            _warn(f"handleResponderDecline: no active state for {incident_id}")
-            return
-        timer = state.get("ack_timer")
-        if timer:
-            timer.cancel()
-            state["ack_timer"] = None
+        if state:
+            timer = state.get("ack_timer")
+            if timer:
+                timer.cancel()
+                state["ack_timer"] = None
 
     incident = _get_incident(incident_id)
     if incident:
+        # Track declined responder ID
+        if getattr(incident, "declined_responder_ids", None) is None:
+            incident.declined_responder_ids = []
+        if responder_id not in incident.declined_responder_ids:
+            incident.declined_responder_ids.append(responder_id)
+
         # Return the declining responder to available (they are refusing the job).
         for r in slice_runner.SEED_RESPONDERS:
             if r.responder_id == responder_id:

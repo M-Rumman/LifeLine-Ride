@@ -210,10 +210,12 @@ export function SituationMap({
       incident?.responder_assigned_id ?? timeline?.assigned_responder ?? null
     if (!assignedId) return null
     const known = responders.find((r) => r.responder_id === assignedId)
-    const basePos = responderPosition(
-      assignedId,
-      known?.village ?? villageId ?? 'VILLAGE-A',
-    )
+    const basePos = (known?.latitude && known?.longitude)
+      ? { lat: known.latitude, lng: known.longitude }
+      : responderPosition(
+          assignedId,
+          known?.village ?? villageId ?? 'VILLAGE-A',
+        )
     return {
       id: assignedId,
       name: known?.name ?? assignedId,
@@ -232,7 +234,9 @@ export function SituationMap({
     return responders
       .filter((r) => r.responder_id !== assignedId)
       .map((r): Actor | null => {
-        const pos = responderPosition(r.responder_id, r.village)
+        const pos = (r.latitude && r.longitude)
+          ? { lat: r.latitude, lng: r.longitude }
+          : responderPosition(r.responder_id, r.village)
         if (!pos) return null
         return {
           key: `idle-${r.responder_id}`,

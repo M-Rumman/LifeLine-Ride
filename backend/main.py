@@ -271,6 +271,14 @@ app.include_router(emergency.router)
 async def responder_chat_alias(request: Request):
     return await emergency.responder_chat(request)
 
+# Direct route aliases for responder actions
+@app.post("/responder/respond")
+@app.post("/api/responders/respond")
+@app.post("/api/v1/responders/respond")
+def responder_respond_alias(payload: emergency.ResponderActionRequest):
+    return emergency.responder_respond(payload)
+
+
 # Media routes: mount uploads, photos, and voice directly, plus mockdata root
 if (_MEDIA_DIR / "media" / "uploads").is_dir():
     app.mount("/media/uploads", StaticFiles(directory=str(_MEDIA_DIR / "media" / "uploads")), name="media_uploads")

@@ -124,6 +124,10 @@ export interface Incident {
   clinical_condition?: string | null
   clinical_category?: 'CATEGORY_A' | 'CATEGORY_B' | 'CATEGORY_C' | null
   dispatch_responder?: boolean
+  declined_responder_ids?: string[]
+  responder_distance_km?: number | null
+  responder_eta_minutes?: number | null
+  status?: string | null
 }
 
 export interface TriageAnalysisResponse {
@@ -169,7 +173,12 @@ export interface Responder {
   training_completed?: boolean
   training_org?: string | null
   equipment_checklist?: string[] | null
+  latitude?: number | null
+  longitude?: number | null
+  distance_km?: number | null
+  eta_minutes?: number | null
 }
+
 
 export interface BHU {
   bhu_id: string

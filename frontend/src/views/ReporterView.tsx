@@ -537,11 +537,16 @@ export function ReporterView() {
     if (result && result.incident.incident_id === incidentId) return result
     if (incident && incidentId === incident.incident_id) {
       const assigned = responders.find((r) => r.responder_id === incident.responder_assigned_id) ?? null
+      const enrichedAssigned = assigned ? {
+        ...assigned,
+        distance_km: incident.responder_distance_km ?? assigned.distance_km,
+        eta_minutes: incident.responder_eta_minutes ?? assigned.eta_minutes,
+      } : null
       return {
         incident,
         dispatch: {
           status: record?.dispatch_status ?? (incident.responder_assigned_id ? 'dispatched' : 'escalated_bhu_only'),
-          responder: assigned,
+          responder: enrichedAssigned,
           bhu: null,
           notify_bhu: incident.bhu_notified,
           bhu_urgency: incident.severity_tier === 'critical' ? 'urgent' : 'standby',
@@ -1219,6 +1224,10 @@ function DistressStatusTracker({
   const hasLowConfidence = incident.injury_type_flags?.includes('low_confidence_triage')
   const voiceWasProvided = Boolean((hasVoiceInput ?? Boolean(incident.voice_ref)) && incident.voice_transcript)
 
+  const activeDistance = incident?.responder_distance_km ?? dispatch?.responder?.distance_km ?? null
+  const activeEta = incident?.responder_eta_minutes ?? dispatch?.responder?.eta_minutes ?? (activeDistance ? Math.max(2, Math.round(activeDistance * 2.5)) : 5)
+  const isReassigned = incident?.status === 'REASSIGNED_TO_NEXT_RESPONDER' || Boolean(incident?.declined_responder_ids && incident.declined_responder_ids.length > 0)
+
   const isAccepted = useMemo(() => {
     const events = incident?.dispatch_events ?? record?.incident?.dispatch_events ?? []
     const acknowledged = events.some((e: any) => {
@@ -1416,20 +1425,34 @@ function DistressStatusTracker({
         {/* Assigned volunteer — appears only once the responder accepts the request */}
         {responderName && isAccepted ? (
           <div className="mt-5 rounded-2xl border border-sky-500/30 bg-sky-500/10 p-5 shadow-glow animate-fade-rise">
-            <p className="label mb-3">
-              {lang === 'ur' ? 'تخصیص شدہ رضاکار' : 'Assigned First Responder'}
-            </p>
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <p className="label">
+                {lang === 'ur' ? 'تخصیص شدہ رضاکار' : 'Assigned First Responder'}
+              </p>
+              {isReassigned && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/20 px-2 py-0.5 text-[11px] font-bold text-amber-300">
+                  ⚡ {lang === 'ur' ? 'منتقل شدہ تفویض' : 'Reassigned to Next Responder'}
+                </span>
+              )}
+            </div>
             <div className="flex flex-wrap items-center gap-4">
               <span className="grid h-12 w-12 place-items-center rounded-full border border-sky-400/50 bg-sky-500/20 text-lg font-bold text-sky-200 shadow-glow">
                 {responderName.trim().charAt(0)}
               </span>
               <div className="min-w-0">
                 <p className="text-base font-bold tracking-tight text-ink">{responderName}</p>
-                <p className="text-xs text-sky-300 font-medium">
-                  {isResponderArrived
-                    ? (lang === 'ur' ? 'جائے وقوعہ پر پہنچ چکے ہیں' : 'Arrived at Emergency Site')
-                    : (lang === 'ur' ? 'مطلع کیا جا چکا ہے' : 'En Route to Emergency Site')}
-                </p>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-sky-300 font-medium">
+                  <span>
+                    {isResponderArrived
+                      ? (lang === 'ur' ? 'جائے وقوعہ پر پہنچ چکے ہیں' : 'Arrived at Emergency Site')
+                      : (lang === 'ur' ? 'مطلع کیا جا چکا ہے' : 'En Route to Emergency Site')}
+                  </span>
+                  {activeDistance != null && (
+                    <span className="text-slate-300 font-mono">
+                      · {activeDistance.toFixed(1)} km (~{activeEta}m ETA)
+                    </span>
+                  )}
+                </div>
               </div>
               <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/20 px-3 py-1 text-xs font-bold text-emerald-300">
                 <StatusDot tone="mint" pulse={!isResponderArrived} />
@@ -1440,19 +1463,37 @@ function DistressStatusTracker({
             </div>
           </div>
         ) : responderName && !isAccepted ? (
-          <div className="mt-5 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 shadow-glow">
+          <div className="mt-5 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 shadow-glow animate-fade-rise">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-bold text-amber-300">
-                  {lang === 'ur'
-                    ? 'قریبی رضاکار کو الرٹ بھیج دیا گیا ہے'
-                    : 'Alert sent to nearest first responder'}
-                </p>
-                <p className="text-xs text-amber-200/80 font-medium mt-0.5">
-                  {lang === 'ur'
-                    ? 'رضاکار کی جانب سے قبول کرنے کا انتظار ہے...'
-                    : 'Awaiting responder acceptance of dispatch invite...'}
-                </p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-bold text-amber-300">
+                    {lang === 'ur'
+                      ? `قریبی رضاکار (${responderName}) کو الرٹ بھیج دیا گیا ہے`
+                      : `Alert sent to nearest first responder (${responderName})`}
+                  </p>
+                  {isReassigned && (
+                    <span className="rounded-full border border-amber-400/50 bg-amber-500/30 px-2 py-0.5 text-[10px] font-bold text-amber-200">
+                      Next In Queue
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-2 mt-1">
+                  <p className="text-xs text-amber-200/80 font-medium">
+                    {isReassigned
+                      ? (lang === 'ur'
+                          ? 'پہلا رضاکار غیر دستیاب تھا۔ اگلے قریبی رضاکار کی قبولیت کا انتظار ہے...'
+                          : 'Prior responder unavailable. Awaiting next responder acceptance...')
+                      : (lang === 'ur'
+                          ? 'رضاکار کی جانب سے قبول کرنے کا انتظار ہے...'
+                          : 'Awaiting responder acceptance of dispatch invite...')}
+                  </p>
+                  {activeDistance != null && (
+                    <span className="text-xs font-mono text-amber-300/90 font-semibold">
+                      · {activeDistance.toFixed(1)} km (~{activeEta}m ETA)
+                    </span>
+                  )}
+                </div>
               </div>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/20 px-3 py-1 text-xs font-bold text-amber-300">
                 <StatusDot tone="critical" pulse />

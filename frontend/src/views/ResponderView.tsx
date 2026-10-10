@@ -151,13 +151,18 @@ export function ResponderView() {
     setActiveResponderId(id)
   }
 
-  // When incident arrives with assigned responder, lock to that responder
+  const lastIncidentIdRef = useRef<string | null>(null)
+
+  // When a new incident arrives with an assigned responder, lock to that responder
   useEffect(() => {
-    if (responderId) {
+    if (incidentId && incidentId !== lastIncidentIdRef.current && responderId) {
+      lastIncidentIdRef.current = incidentId
       setLocalResponderId(responderId)
       setActiveResponderId(responderId)
+    } else if (!incidentId) {
+      lastIncidentIdRef.current = null
     }
-  }, [responderId, setActiveResponderId])
+  }, [incidentId, responderId, setActiveResponderId])
 
   // When selectedVillage changes, auto-select first available responder from that newly selected village
   useEffect(() => {
@@ -222,19 +227,34 @@ export function ResponderView() {
     return () => cancelAnimationFrame(frameId)
   }, [isEnRoute])
 
-  /** Distance the responder has to cover — derived from the village registry. */
+  /** Distance the responder has to cover — derived from backend incident record or geography calculation. */
   const distance = useMemo(() => {
+    if (incident?.responder_distance_km != null) {
+      return incident.responder_distance_km
+    }
+    if (responder?.distance_km != null) {
+      return responder.distance_km
+    }
     if (!incident?.gps_location || !responderId) return null
-    const from = responderPosition(
-      responderId,
-      responder?.village ?? incident.gps_location.village_id,
-    )
+    const from = (responder?.latitude && responder?.longitude)
+      ? { lat: responder.latitude, lng: responder.longitude }
+      : responderPosition(
+          responderId,
+          responder?.village ?? incident.gps_location.village_id,
+        )
     if (!from) return null
     return distanceKm(from, {
       lat: incident.gps_location.latitude,
       lng: incident.gps_location.longitude,
     })
   }, [incident, responderId, responder])
+
+  const responderEta = useMemo(() => {
+    if (incident?.responder_eta_minutes != null) return incident.responder_eta_minutes
+    if (responder?.eta_minutes != null) return responder.eta_minutes
+    if (distance != null) return Math.max(2, Math.round(distance * 2.5))
+    return 5
+  }, [incident, responder, distance])
 
   const displayDistance = useMemo(() => {
     if (arrived || isClosed) {
@@ -485,8 +505,29 @@ export function ResponderView() {
           }}
           onBack={() => setActiveTab('console')}
         />
-      ) : !incidentId || !incident ? (
+      ) : !incidentId || !incident || selectedResponderId !== responderId ? (
         <div className="flex flex-col gap-5">
+          {incident?.declined_responder_ids?.includes(selectedResponderId) && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/15 p-4 text-amber-200 shadow-glow animate-fade-rise">
+              <div className="flex items-center gap-2.5">
+                <StatusDot tone="critical" />
+                <span className="text-xs font-semibold">
+                  {lang === 'ur'
+                    ? `آپ نے یہ الرٹ مسترد کر دیا تھا۔ ایمرجنسی اگلے قریبی رضاکار (${responders.find((r) => r.responder_id === incident.responder_assigned_id)?.name ?? incident.responder_assigned_id ?? 'BHU'}) کو تفویض کر دی گئی ہے۔`
+                    : `You declined this dispatch. Escalated to next available candidate (${responders.find((r) => r.responder_id === incident.responder_assigned_id)?.name ?? incident.responder_assigned_id ?? 'BHU Hub'}).`}
+                </span>
+              </div>
+              {incident.responder_assigned_id && incident.responder_assigned_id !== selectedResponderId && (
+                <button
+                  type="button"
+                  onClick={() => handleSelectResponder(incident.responder_assigned_id!)}
+                  className="rounded-full border border-amber-400/50 bg-amber-500/30 px-3 py-1 text-xs font-bold text-amber-100 hover:bg-amber-500/50 transition-colors"
+                >
+                  {lang === 'ur' ? 'اگلے رضاکار کا پینل دیکھیں →' : `Switch to ${responders.find((r) => r.responder_id === incident.responder_assigned_id)?.name ?? incident.responder_assigned_id} →`}
+                </button>
+              )}
+            </div>
+          )}
           {/* Duty Readiness Dashboard Card */}
           <div className="card-panel p-6 sm:p-8 animate-fade-rise">
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-5">
@@ -567,15 +608,25 @@ export function ResponderView() {
             {/* ---- Distance & Injury Facts ---- */}
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="well p-5">
-                <p className="label">Distance to patient</p>
-                <p className="mt-1 text-3xl font-extrabold tracking-tighter text-sky-400 tabular-nums">
-                  {displayDistance}
-                </p>
-                <div className="mt-2 flex items-center gap-1.5">
+                <p className="label">{lang === 'ur' ? 'مریض تک کا فاصلہ و متوقع وقت' : 'Distance & Estimated Arrival'}</p>
+                <div className="flex items-baseline gap-2.5">
+                  <p className="mt-1 text-3xl font-extrabold tracking-tighter text-sky-400 tabular-nums">
+                    {displayDistance}
+                  </p>
+                  <span className="text-sm font-semibold text-slate-300">
+                    · ~{responderEta} {lang === 'ur' ? 'منٹ' : 'min ETA'}
+                  </span>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-500/30 bg-sky-500/10 px-2.5 py-0.5 text-xs font-semibold text-sky-300">
                     <StatusDot tone="cyan" pulse />
                     {village?.label_en ?? 'Local Village'}
                   </span>
+                  {(incident?.status === 'REASSIGNED_TO_NEXT_RESPONDER' || (incident?.declined_responder_ids && incident.declined_responder_ids.length > 0)) && (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/20 px-2.5 py-0.5 text-xs font-bold text-amber-300">
+                      ⚡ {lang === 'ur' ? 'منتقل شدہ ترجیحی کال' : 'Prioritized Escalation'}
+                    </span>
+                  )}
                 </div>
               </div>
 

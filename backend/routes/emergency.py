@@ -515,6 +515,10 @@ async def report_emergency(
     record["incident"]["clinical_condition"] = incident.clinical_condition
     record["incident"]["dispatch_responder"] = incident.dispatch_responder
     record["incident"]["ambulance_requested"] = incident.ambulance_requested
+    record["incident"]["responder_distance_km"] = incident.responder_distance_km
+    record["incident"]["responder_eta_minutes"] = incident.responder_eta_minutes
+    record["incident"]["declined_responder_ids"] = incident.declined_responder_ids
+    record["incident"]["status"] = incident.status
 
     # Module 6.5: PostgreSQL archive (non-fatal — memory state commits first).
     db_persisted = True
@@ -619,6 +623,7 @@ def get_incident(incident_id: str):
 # ===========================================================================
 
 @router.post("/responder/respond")
+@router.post("/responders/respond")
 def responder_respond(payload: ResponderActionRequest):
     record = _require_open_record(payload.incident_id)
     incident = record["incident"]
@@ -643,9 +648,14 @@ def responder_respond(payload: ResponderActionRequest):
         "reason": payload.reason,
         "responder_id": payload.responder_id,
         "responder_assigned_id": updated.get("responder_assigned_id"),
+        "status": updated.get("status"),
+        "responder_distance_km": updated.get("responder_distance_km"),
+        "responder_eta_minutes": updated.get("responder_eta_minutes"),
+        "declined_responder_ids": updated.get("declined_responder_ids", []),
         "dispatch_events": updated.get("dispatch_events", []),
         "responder_status_after": _responder_status(payload.responder_id),
     }
+
 
 
 # ===========================================================================

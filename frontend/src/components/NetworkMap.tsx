@@ -47,12 +47,15 @@ export function NetworkMap({ responders = [], heightClass = 'h-[430px]' }: { res
     })
 
     responders.forEach((r) => {
-      const pos = responderPosition(r.responder_id, r.village)
+      const pos = (r.latitude && r.longitude)
+        ? { lat: r.latitude, lng: r.longitude }
+        : responderPosition(r.responder_id, r.village)
       if (!pos) return
       points.push([pos.lat, pos.lng])
       const live = r.current_availability_status === 'available'
+      const distInfo = r.distance_km != null ? `<br/><small class="text-sky-400">Proximity: ${r.distance_km.toFixed(1)} km (~${r.eta_minutes ?? 5}m ETA)</small>` : ''
       L.marker([pos.lat, pos.lng], { icon: dotIcon(RESPONDER, 9, live) })
-        .bindPopup(`<strong>${r.name}</strong><br/><span>${r.current_availability_status}</span><br/><small>Coverage position: ${r.village}</small>`)
+        .bindPopup(`<strong>${r.name}</strong><br/><span>${r.current_availability_status}</span><br/><small>Coverage: ${r.village}</small>${distInfo}`)
         .addTo(map)
     })
 

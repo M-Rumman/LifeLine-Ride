@@ -387,6 +387,11 @@ class Incident(BaseModel):
     clinical_condition: Optional[str] = None
     clinical_category: Optional[ClinicalCategory] = None
     dispatch_responder: bool = True
+    # ADDITIVE: Proximity dispatch & escalation tracking
+    declined_responder_ids: List[str] = []
+    responder_distance_km: Optional[float] = None
+    responder_eta_minutes: Optional[int] = None
+    status: Optional[str] = None
 
 
 
@@ -404,6 +409,11 @@ class Responder(BaseModel):
     training_completed: bool = False
     training_org: Optional[str] = None
     equipment_checklist: Optional[List[str]] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    distance_km: Optional[float] = None
+    eta_minutes: Optional[int] = None
+
 
 
 class BHU(BaseModel):
@@ -966,7 +976,22 @@ SEED_RESPONDERS: List[Responder] = [
     )
 ]
 
+def init_seed_responder_coordinates(responders: Optional[List[Responder]] = None) -> None:
+    """Initialize realistic distinct GPS coordinates for responders by village."""
+    from geography import calculate_responder_coords
+    target = responders if responders is not None else SEED_RESPONDERS
+    village_counts: dict[str, int] = {}
+    for r in target:
+        idx = village_counts.get(r.village, 0)
+        village_counts[r.village] = idx + 1
+        if getattr(r, "latitude", None) is None or getattr(r, "longitude", None) is None:
+            r.latitude, r.longitude = calculate_responder_coords(r.village, idx)
+
+
+init_seed_responder_coordinates()
+
 INCIDENT_STORE: List[dict] = []
+
 
 
 # ==========================================
@@ -1611,10 +1636,26 @@ def matchResponderAndBHU(incident: Incident) -> tuple[Optional[Responder], Optio
     if not village_responders:
         village_responders = [r for r in SEED_RESPONDERS if r.village == coverage_id]
 
-    assigned_responder = next(
-        (r for r in village_responders if r.current_availability_status == "available"),
-        None
-    )
+    declined = getattr(incident, "declined_responder_ids", []) or []
+    available = [
+        r for r in village_responders
+        if r.current_availability_status == "available"
+        and r.responder_id not in declined
+    ]
+
+    try:
+        from geography import haversine_distance_km, calculate_eta_minutes
+        rep_lat = incident.gps_location.latitude
+        rep_lon = incident.gps_location.longitude
+        for r in available:
+            if getattr(r, "latitude", None) is not None and getattr(r, "longitude", None) is not None:
+                r.distance_km = haversine_distance_km(rep_lat, rep_lon, r.latitude, r.longitude)
+                r.eta_minutes = calculate_eta_minutes(r.distance_km)
+        available.sort(key=lambda r: (r.distance_km if r.distance_km is not None else 999.0))
+    except Exception:
+        pass
+
+    assigned_responder = available[0] if available else None
 
     return assigned_responder, linked_bhu
 
@@ -1643,6 +1684,9 @@ def dispatch(incident: Incident, responder: Optional[Responder], bhu: Optional[B
     if dispatch_responder and responder:
         incident.responder_assigned_id = responder.responder_id
         incident.responder_dispatch_timestamp = now_iso
+        incident.responder_distance_km = getattr(responder, "distance_km", None)
+        incident.responder_eta_minutes = getattr(responder, "eta_minutes", None)
+        incident.status = "dispatched"
         # CRITICAL FIX: Mutate state to busy so responder cannot be double-assigned
         responder.current_availability_status = "busy"
         # Part B persistence fix: this legacy vertical-slice dispatch path is a
@@ -1667,12 +1711,19 @@ def dispatch(incident: Incident, responder: Optional[Responder], bhu: Optional[B
 
     if not dispatch_responder and not ambulance_requested:
         status = "self_care_only"
+        incident.status = status
         print(f"  [DISPATCH LOG] Self-care only for {incident.incident_id} ({clinical_cond}). No emergency dispatch required.")
     elif responder and dispatch_responder:
         status = "dispatched"
+        incident.status = status
         print(f"  [DISPATCH LOG] Assigned: {responder.name} ({responder.responder_id}) -> Status set to BUSY.")
     else:
         status = "escalated_bhu_only" if bhu else "no_responders_available"
+        incident.status = status
+        incident.responder_assigned_id = None
+        incident.responder_distance_km = None
+        incident.responder_eta_minutes = None
+
         print(f"  [DISPATCH WARNING] No responders available in {incident.gps_location.village_id}. Escalated to {bhu.name if bhu else 'None'}.")
 
     if incident.bhu_notified and bhu:

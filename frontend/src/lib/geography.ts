@@ -244,18 +244,33 @@ export function coverageVillageId(id: string | null | undefined): string | undef
   return villageById(id)?.coverage_village_id ?? id
 }
 
-/** Deterministic fallback position for responders (always 1.2 km to 1.8 km from village center). */
-export function responderPosition(responderId: string, villageId: string): LatLng | null {
+/** Deterministic position for responders with realistic, distinct proximity offsets. */
+export function responderPosition(responderId: string, villageId: string, rankIndex?: number): LatLng | null {
   const village = villageById(villageId)
   if (!village) return null
 
-  let hash = 0
-  for (let i = 0; i < responderId.length; i += 1) {
-    hash = (hash * 31 + responderId.charCodeAt(i)) >>> 0
+  let rank = rankIndex
+  if (rank === undefined) {
+    const match = responderId.match(/-0?(\d+)$/)
+    if (match) {
+      rank = Math.max(0, parseInt(match[1], 10) - 1)
+    } else {
+      let hash = 0
+      for (let i = 0; i < responderId.length; i += 1) {
+        hash = (hash * 31 + responderId.charCodeAt(i)) >>> 0
+      }
+      rank = (hash >> 3) % 5
+    }
   }
-  // Deterministic angle & distance (1.2 km to 1.8 km)
-  const angle = ((hash % 360) * Math.PI) / 180
-  const radiusKm = 1.2 + ((hash >> 3) % 7) * 0.1 // 1.2 to 1.8 km
+
+  // Radii configured to yield distinct distances: ~0.6 km, ~1.4 km, ~2.8 km, etc.
+  const radii = [0.6, 1.4, 2.8, 4.0, 5.2]
+  const anglesDeg = [45.0, 160.0, 290.0, 75.0, 210.0]
+
+  const radiusKm = radii[rank % radii.length]
+  const angleDeg = anglesDeg[rank % anglesDeg.length]
+  const angle = (angleDeg * Math.PI) / 180
+
   const dLat = (radiusKm / 111.0) * Math.sin(angle)
   const dLng = (radiusKm / (111.0 * Math.cos((village.center.lat * Math.PI) / 180))) * Math.cos(angle)
 
@@ -276,7 +291,7 @@ export function distanceKm(a: LatLng, b: LatLng): number {
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)))
 }
 
-export const DEFAULT_SEED_RESPONDERS: import('./types').Responder[] = [
+const RAW_SEED_RESPONDERS: import('./types').Responder[] = [
   // Tamman
   { responder_id: 'RESP-TAM-01', name: 'Tariq Mahmood', village: 'TAMMAN', linked_bhu_id: 'BHU-001', current_availability_status: 'available', is_verified: true },
   { responder_id: 'RESP-TAM-02', name: 'Farhan Ali', village: 'TAMMAN', linked_bhu_id: 'BHU-001', current_availability_status: 'available', is_verified: true },
@@ -314,3 +329,18 @@ export const DEFAULT_SEED_RESPONDERS: import('./types').Responder[] = [
   { responder_id: 'RESP-BDH-02', name: 'Shoaib Akhtar', village: 'BUDHIAL', linked_bhu_id: 'BHU-005', current_availability_status: 'available', is_verified: true },
   { responder_id: 'RESP-BDH-03', name: 'Imran Nazir', village: 'BUDHIAL', linked_bhu_id: 'BHU-005', current_availability_status: 'available', is_verified: true },
 ]
+
+export const DEFAULT_SEED_RESPONDERS: import('./types').Responder[] = RAW_SEED_RESPONDERS.map((r, idx) => {
+  const match = r.responder_id.match(/-0?(\d+)$/)
+  const rank = match ? Math.max(0, parseInt(match[1], 10) - 1) : (idx % 3)
+  const pos = responderPosition(r.responder_id, r.village, rank)
+  const radii = [0.6, 1.4, 2.8, 4.0, 5.2]
+  const dist = radii[rank % radii.length]
+  return {
+    ...r,
+    latitude: pos?.lat,
+    longitude: pos?.lng,
+    distance_km: dist,
+    eta_minutes: Math.max(2, Math.round(dist * 2.5)),
+  }
+})
